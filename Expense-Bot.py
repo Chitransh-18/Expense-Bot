@@ -65,10 +65,11 @@ def setup_google_sheets():
         try:
             worksheet_expenses = spreadsheet.worksheet("Expenses")
         except gspread.WorksheetNotFound:
-            worksheet_expenses = spreadsheet.add_worksheet("Expenses", rows=1000, cols=14)
+            worksheet_expenses = spreadsheet.add_worksheet("Expenses", rows=1000, cols=16)
             worksheet_expenses.append_row([
                 "Transaction ID", "Timestamp", "User ID", "Username", "First Name",
-                "Expense Type", "Category", "Amount", "Payment Mode", "Description", "Date", "Status", "Notes", "Split With"
+                "Expense Type", "Category", "Amount", "Payment Mode", "Description", 
+                "Date", "Status", "Notes", "Split With", "Split Type", "Split Details"
             ])
             logger.info("Created Expenses worksheet")
 
@@ -112,7 +113,7 @@ async def log_chat_history_async(user_id, username, first_name, action_type, act
 
 
 async def save_expense_async(user_id, username, first_name, expense_type, category, amount, payment_mode,
-                             description="", split_with=None):
+                             description="", split_with=None, split_type=None, split_details=None):
     """Save expense asynchronously"""
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -120,10 +121,12 @@ async def save_expense_async(user_id, username, first_name, expense_type, catego
         transaction_id = f"TXN{user_id}_{int(datetime.now().timestamp())}"
         
         split_with_str = ", ".join(split_with) if split_with else ""
+        split_details_str = split_details if split_details else ""
         
         row = [
             transaction_id, timestamp, str(user_id), username or "N/A", first_name or "N/A",
-            expense_type, category, float(amount), payment_mode, description, date, "Completed", "", split_with_str
+            expense_type, category, float(amount), payment_mode, description, date, 
+            "Completed", "", split_with_str, split_type or "", split_details_str
         ]
 
         loop = asyncio.get_event_loop()
@@ -175,6 +178,24 @@ async def get_user_chat_log_async(user_id, limit=20):
     except Exception as e:
         logger.error(f"Error fetching chat log: {e}")
         return []
+
+
+async def show_main_menu(update_or_query, context: ContextTypes.DEFAULT_TYPE, is_query=False):
+    """Show the main menu"""
+    keyboard = [
+        [InlineKeyboardButton("Personal 💰", callback_data='personal')],
+        [InlineKeyboardButton("Split 👥", callback_data='split')],
+        [InlineKeyboardButton("View My Expenses 📊", callback_data='view_expenses')],
+        [InlineKeyboardButton("Transaction History 📜", callback_data='transaction_history')],
+        [InlineKeyboardButton("Chat History 💬", callback_data='chat_history')],
+        [InlineKeyboardButton("Help ℹ️", callback_data='help')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if is_query:
+        await update_or_query.edit_message_text("Choose an option:", reply_markup=reply_markup)
+    else:
+        await update_or_query.reply_text("Choose an option:", reply_markup=reply_markup)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -392,15 +413,33 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(help_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
     elif query.data == "back_to_main":
-        keyboard = [
-            [InlineKeyboardButton("Personal 💰", callback_data='personal')],
-            [InlineKeyboardButton("Split 👥", callback_data='split')],
-            [InlineKeyboardButton("View My Expenses 📊", callback_data='view_expenses')],
-            [InlineKeyboardButton("Transaction History 📜", callback_data='transaction_history')],
-            [InlineKeyboardButton("Chat History 💬", callback_data='chat_history')],
-            [InlineKeyboardButton("Help ℹ️", callback_data='help')]
-        ]
-        await query.edit_message_text("Choose an option:", reply_markup=InlineKeyboardMarkup(keyboard))
+        await show_main_menu(query, context, is_query=True)
+
+    elif query.data.startswith('split_type_'):
+        split_type = query.data.replace('split_type_', '')
+        context.user_data['split_type'] = split_type
+        
+        if split_type == 'equal':
+            context.user_data['awaiting'] = 'amount'
+            await query.edit_message_text(
+                f"✅ Split Type: *Equal*\n"
+                f"✅ Category: *{context.user_data['category']}*\n"
+                f"✅ People: {', '.join(context.user_data['all_people'])}\n\n"
+                f"💵 Enter the *total* amount (₹):",
+                parse_mode="Markdown"
+            )
+        else:  # custom
+            context.user_data['awaiting'] = 'custom_amounts'
+            people_list = "\n".join([f"{i+1}. {name}" for i, name in enumerate(context.user_data['all_people'])])
+            await query.edit_message_text(
+                f"✅ Split Type: *Custom*\n"
+                f"✅ Category: *{context.user_data['category']}*\n\n"
+                f"👥 People involved:\n{people_list}\n\n"
+                f"💵 Enter amounts for each person separated by commas\n"
+                f"Example: 100,150,200\n"
+                f"(Order: {', '.join(context.user_data['all_people'])})",
+                parse_mode="Markdown"
+            )
 
     else:
         # Category selection
@@ -419,7 +458,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['awaiting'] = 'names'
             await query.edit_message_text(
                 f"✅ Category: *{category}* (Split)\n\n"
-                f"👥 Who are you splitting this with?\n\nEnter their names separated by commas (e.g., Amrit, Daksh, Dhruv)",
+                f"👥 Enter names of people (including yourself) separated by commas\n"
+                f"Example: You, Amrit, Daksh, Dhruv",
                 parse_mode="Markdown"
             )
         else:  # Personal expense
@@ -442,39 +482,100 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get('awaiting') == 'names':
         names_text = text
         names_list = [name.strip() for name in names_text.split(',')]
-        context.user_data['split_with'] = names_list
-        context.user_data['awaiting'] = 'amount'
-
+        context.user_data['all_people'] = names_list
+        
         asyncio.create_task(log_chat_history_async(
             user.id, user.username, user.first_name, "Split Names Entered", ", ".join(names_list)
         ))
 
+        # Ask for split type
+        keyboard = [
+            [InlineKeyboardButton("Equal Split ⚖️", callback_data='split_type_equal')],
+            [InlineKeyboardButton("Custom Split ✍️", callback_data='split_type_custom')]
+        ]
         await update.message.reply_text(
-            f"✅ Splitting with: *{', '.join(names_list)}*\n\n"
-            f"💵 Enter the *total* amount (₹):",
+            f"✅ People: *{', '.join(names_list)}*\n\n"
+            f"🔀 How do you want to split?",
+            reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
+        context.user_data['awaiting'] = None
+
+    elif context.user_data.get('awaiting') == 'custom_amounts':
+        try:
+            amounts = [float(amt.strip()) for amt in text.split(',')]
+            if len(amounts) != len(context.user_data['all_people']):
+                await update.message.reply_text(
+                    f"❌ Please enter {len(context.user_data['all_people'])} amounts (one for each person)"
+                )
+                return
+            
+            total_amount = sum(amounts)
+            context.user_data['amount'] = total_amount
+            
+            # Create split details
+            split_details = ", ".join([f"{name}: ₹{amt}" for name, amt in zip(context.user_data['all_people'], amounts)])
+            context.user_data['split_details'] = split_details
+            
+            # Now ask who paid
+            keyboard = []
+            for person in context.user_data['all_people']:
+                keyboard.append([InlineKeyboardButton(f"{person} paid 💰", callback_data=f'paidby_{person}')])
+            
+            await update.message.reply_text(
+                f"✅ Custom Split:\n{split_details}\n\n"
+                f"💰 Total: ₹{total_amount}\n\n"
+                f"👤 Who paid the entire amount?",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
+            context.user_data['awaiting'] = None
+            
+        except ValueError:
+            await update.message.reply_text("❌ Please enter valid numbers separated by commas")
 
     elif context.user_data.get('awaiting') == 'amount':
         try:
             amount = float(text)
             context.user_data['amount'] = amount
-            context.user_data['awaiting'] = 'payment_mode'
-
+            
             asyncio.create_task(log_chat_history_async(
                 user.id, user.username, user.first_name, "Amount Entered", f"₹{amount}"
             ))
 
-            keyboard = [
-                [InlineKeyboardButton("Cash 💵", callback_data='payment_cash')],
-                [InlineKeyboardButton("Online/Net Banking 🌐", callback_data='payment_online')],
-                [InlineKeyboardButton("Card 💳", callback_data='payment_card')],
-                [InlineKeyboardButton("UPI 📱", callback_data='payment_upi')]
-            ]
-            await update.message.reply_text(
-                f"💵 Amount: ₹{amount}\n\n💳 Select payment mode:",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+            # For split expenses with equal split
+            if context.user_data.get('expense_type') == 'Split' and context.user_data.get('split_type') == 'equal':
+                num_people = len(context.user_data['all_people'])
+                per_person = amount / num_people
+                split_details = f"Equal split: ₹{per_person:.2f} per person among {num_people} people"
+                context.user_data['split_details'] = split_details
+                
+                # Ask who paid
+                keyboard = []
+                for person in context.user_data['all_people']:
+                    keyboard.append([InlineKeyboardButton(f"{person} paid 💰", callback_data=f'paidby_{person}')])
+                
+                await update.message.reply_text(
+                    f"💵 Total Amount: ₹{amount}\n"
+                    f"👥 Split among: {', '.join(context.user_data['all_people'])}\n"
+                    f"💰 Per person: ₹{per_person:.2f}\n\n"
+                    f"👤 Who paid the entire amount?",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+                context.user_data['awaiting'] = None
+            else:
+                # Personal expense - continue to payment mode
+                context.user_data['awaiting'] = 'payment_mode'
+                keyboard = [
+                    [InlineKeyboardButton("Cash 💵", callback_data='payment_cash')],
+                    [InlineKeyboardButton("Online/Net Banking 🌐", callback_data='payment_online')],
+                    [InlineKeyboardButton("Card 💳", callback_data='payment_card')],
+                    [InlineKeyboardButton("UPI 📱", callback_data='payment_upi')]
+                ]
+                await update.message.reply_text(
+                    f"💵 Amount: ₹{amount}\n\n💳 Select payment mode:",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
         except ValueError:
             await update.message.reply_text("❌ Please enter a valid number")
 
@@ -488,23 +589,34 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             amount=context.user_data['amount'],
             payment_mode=context.user_data['payment_mode'],
             description=description,
-            split_with=context.user_data.get('split_with')
+            split_with=context.user_data.get('all_people'),
+            split_type=context.user_data.get('split_type'),
+            split_details=context.user_data.get('split_details')
         )
 
         if transaction_id:
             short_id = transaction_id[-8:]
             payment_icon = {"Cash": "💵", "Online": "🌐", "Card": "💳", "Upi": "📱"}.get(
                 context.user_data['payment_mode'], "💰")
-            await update.message.reply_text(
-                f"✅ *Expense Saved!*\n\n"
+            
+            success_msg = (
+                f"🎉 *Congratulations!*\n\n"
+                f"✅ *Transaction Successfully Recorded!*\n\n"
                 f"🏷️ Category: {context.user_data['category']}\n"
                 f"💰 Amount: ₹{context.user_data['amount']}\n"
                 f"{payment_icon} Payment: {context.user_data['payment_mode']}\n"
                 f"📝 Description: {description}\n"
-                f"🔖 Transaction ID: `{short_id}`\n\n"
-                f"Use /start to add more!",
-                parse_mode="Markdown"
+                f"🔖 Transaction ID: `{short_id}`\n"
             )
+            
+            if context.user_data.get('split_details'):
+                success_msg += f"\n💸 {context.user_data['split_details']}\n"
+            
+            await update.message.reply_text(success_msg, parse_mode="Markdown")
+            
+            # Auto-redirect to main menu
+            await asyncio.sleep(1)
+            await show_main_menu(update.message, context, is_query=False)
         else:
             await update.message.reply_text("❌ Failed to save. Try again.")
 
@@ -518,7 +630,28 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = query.from_user
     await query.answer()
 
-    if query.data.startswith('payment_'):
+    if query.data.startswith('paidby_'):
+        # Extract who paid
+        paid_by = query.data.replace('paidby_', '')
+        context.user_data['paid_by'] = paid_by
+        context.user_data['awaiting'] = 'payment_mode'
+        
+        # Now ask for payment mode
+        keyboard = [
+            [InlineKeyboardButton("Cash 💵", callback_data='payment_cash')],
+            [InlineKeyboardButton("Online/Net Banking 🌐", callback_data='payment_online')],
+            [InlineKeyboardButton("Card 💳", callback_data='payment_card')],
+            [InlineKeyboardButton("UPI 📱", callback_data='payment_upi')]
+        ]
+        await query.edit_message_text(
+            f"✅ Paid by: *{paid_by}*\n"
+            f"💵 Amount: ₹{context.user_data['amount']}\n\n"
+            f"💳 Select payment mode:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+
+    elif query.data.startswith('payment_'):
         payment_mode = query.data.replace('payment_', '').title()
         context.user_data['payment_mode'] = payment_mode
         context.user_data['awaiting'] = 'description'
@@ -544,22 +677,33 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             amount=context.user_data['amount'],
             payment_mode=context.user_data['payment_mode'],
             description="",
-            split_with=context.user_data.get('split_with')
+            split_with=context.user_data.get('all_people'),
+            split_type=context.user_data.get('split_type'),
+            split_details=context.user_data.get('split_details')
         )
 
         if transaction_id:
             short_id = transaction_id[-8:]
             payment_icon = {"Cash": "💵", "Online": "🌐", "Card": "💳", "Upi": "📱"}.get(
                 context.user_data['payment_mode'], "💰")
-            await query.edit_message_text(
-                f"✅ *Expense Saved!*\n\n"
+            
+            success_msg = (
+                f"🎉 *Congratulations!*\n\n"
+                f"✅ *Transaction Successfully Recorded!*\n\n"
                 f"🏷️ Category: {context.user_data['category']}\n"
                 f"💰 Amount: ₹{context.user_data['amount']}\n"
                 f"{payment_icon} Payment: {context.user_data['payment_mode']}\n"
-                f"🔖 Transaction ID: `{short_id}`\n\n"
-                f"Use /start to add more!",
-                parse_mode="Markdown"
+                f"🔖 Transaction ID: `{short_id}`\n"
             )
+            
+            if context.user_data.get('split_details'):
+                success_msg += f"\n💸 {context.user_data['split_details']}\n"
+            
+            await query.edit_message_text(success_msg, parse_mode="Markdown")
+            
+            # Auto-redirect to main menu
+            await asyncio.sleep(1)
+            await show_main_menu(query.message, context, is_query=False)
         else:
             await query.edit_message_text("❌ Failed to save. Try again.")
 
@@ -599,7 +743,7 @@ def main():
     telegram_app = Application.builder().token(TOKEN).build()
 
     telegram_app.add_handler(CommandHandler("start", start))
-    telegram_app.add_handler(CallbackQueryHandler(payment_handler, pattern='^(payment_|skip_description)'))
+    telegram_app.add_handler(CallbackQueryHandler(payment_handler, pattern='^(payment_|skip_description|paidby_)'))
     telegram_app.add_handler(CallbackQueryHandler(button_handler))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
