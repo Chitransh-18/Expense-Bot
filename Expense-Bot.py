@@ -121,15 +121,21 @@ async def save_expense_async(user_id, username, first_name, expense_type, catego
             split_with_str, split_type or "", split_details_str
         ]
 
+        logger.info(f"Attempting to save expense for user {user_id}: {transaction_id}")
+        logger.info(f"Row data: User ID={user_id}, Category={category}, Amount={amount}")
+        
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, worksheet_expenses.append_row, row)
-        logger.info(f"Expense saved successfully: {transaction_id}")
+        logger.info(f"✓ Expense saved successfully to Google Sheets: {transaction_id}")
 
         # Clear cache and force next fetch to refresh
         global expense_cache, cache_last_updated
         expense_cache = []
         cache_last_updated = None
-        logger.info("Cache cleared after saving expense")
+        logger.info("✓ Cache cleared after saving expense")
+
+        # Wait a moment for Google Sheets to propagate the change
+        await asyncio.sleep(0.5)
 
         await log_chat_history_async(
             user_id, username, first_name, "Expense Added",
@@ -138,7 +144,7 @@ async def save_expense_async(user_id, username, first_name, expense_type, catego
 
         return transaction_id
     except Exception as e:
-        logger.error(f"Error saving expense: {e}", exc_info=True)
+        logger.error(f"✗ Error saving expense: {e}", exc_info=True)
         return None
 
 
@@ -157,12 +163,38 @@ async def get_user_expenses_async(user_id, force_refresh=False):
         
         if should_refresh:
             loop = asyncio.get_event_loop()
-            expense_cache = await loop.run_in_executor(None, worksheet_expenses.get_all_records)
-            cache_last_updated = now
-            logger.info(f"Cache refreshed. Total records: {len(expense_cache)}")
+            
+            # Retry mechanism for API calls
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    expense_cache = await loop.run_in_executor(None, worksheet_expenses.get_all_records)
+                    cache_last_updated = now
+                    logger.info(f"Cache refreshed successfully. Total records: {len(expense_cache)}")
+                    break
+                except Exception as e:
+                    logger.warning(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1)  # Wait 1 second before retry
+                    else:
+                        raise
+
+        # Debug logging
+        logger.info(f"Searching for expenses with User ID: {user_id}")
+        logger.info(f"Total records in cache: {len(expense_cache)}")
+        
+        # Check what User IDs exist in the sheet
+        if expense_cache:
+            unique_user_ids = set(str(r.get('User ID', '')) for r in expense_cache)
+            logger.info(f"Unique User IDs in sheet: {unique_user_ids}")
 
         user_expenses = [r for r in expense_cache if str(r.get('User ID', '')) == str(user_id)]
         logger.info(f"Found {len(user_expenses)} expenses for user {user_id}")
+        
+        # Debug: Show first record if exists
+        if user_expenses:
+            logger.info(f"First expense record: {user_expenses[0]}")
+        
         return user_expenses
     except Exception as e:
         logger.error(f"Error fetching expenses: {e}", exc_info=True)
@@ -219,6 +251,47 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
+
+
+async def debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Debug command to check Google Sheets data"""
+    user = update.effective_user
+    
+    try:
+        # Force fresh fetch
+        loop = asyncio.get_event_loop()
+        all_records = await loop.run_in_executor(None, worksheet_expenses.get_all_records)
+        
+        total_records = len(all_records)
+        user_records = [r for r in all_records if str(r.get('User ID', '')) == str(user.id)]
+        
+        message = f"🔍 *Debug Info*\n\n"
+        message += f"Your User ID: `{user.id}`\n"
+        message += f"Your Username: {user.username or 'None'}\n"
+        message += f"Your Name: {user.first_name}\n\n"
+        message += f"Total records in sheet: {total_records}\n"
+        message += f"Your records: {len(user_records)}\n\n"
+        
+        if user_records:
+            message += f"*Your Latest Record:*\n"
+            latest = user_records[-1]
+            message += f"Category: {latest.get('Category', 'N/A')}\n"
+            message += f"Amount: ₹{latest.get('Amount', 0)}\n"
+            message += f"Date: {latest.get('Date', 'N/A')}\n"
+        else:
+            message += "⚠️ No records found for your User ID\n\n"
+            # Show sample of User IDs in sheet
+            if all_records:
+                sample_ids = [str(r.get('User ID', 'N/A')) for r in all_records[:5]]
+                message += f"Sample User IDs in sheet:\n"
+                for uid in sample_ids:
+                    message += f"• `{uid}`\n"
+        
+        await update.message.reply_text(message, parse_mode="Markdown")
+        
+    except Exception as e:
+        logger.error(f"Debug command error: {e}", exc_info=True)
+        await update.message.reply_text(f"Debug Error: {str(e)}")
 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -739,6 +812,7 @@ def main():
 
     # Add handlers
     telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CommandHandler("debug", debug_command))  # Debug command
     telegram_app.add_handler(CallbackQueryHandler(payment_handler, pattern='^(payment_|skip_description)'))
     telegram_app.add_handler(CallbackQueryHandler(button_handler))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
