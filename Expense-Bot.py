@@ -65,10 +65,10 @@ def setup_google_sheets():
         try:
             worksheet_expenses = spreadsheet.worksheet("Expenses")
         except gspread.WorksheetNotFound:
-            worksheet_expenses = spreadsheet.add_worksheet("Expenses", rows=1000, cols=13)
+            worksheet_expenses = spreadsheet.add_worksheet("Expenses", rows=1000, cols=14)
             worksheet_expenses.append_row([
                 "Transaction ID", "Timestamp", "User ID", "Username", "First Name",
-                "Expense Type", "Category", "Amount", "Payment Mode", "Description", "Date", "Status", "Notes"
+                "Expense Type", "Category", "Amount", "Payment Mode", "Description", "Date", "Status", "Notes", "Split With"
             ])
             logger.info("Created Expenses worksheet")
 
@@ -112,16 +112,18 @@ async def log_chat_history_async(user_id, username, first_name, action_type, act
 
 
 async def save_expense_async(user_id, username, first_name, expense_type, category, amount, payment_mode,
-                             description=""):
+                             description="", split_with=None):
     """Save expense asynchronously"""
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         date = datetime.now().strftime("%Y-%m-%d")
         transaction_id = f"TXN{user_id}_{int(datetime.now().timestamp())}"
-
+        
+        split_with_str = ", ".join(split_with) if split_with else ""
+        
         row = [
             transaction_id, timestamp, str(user_id), username or "N/A", first_name or "N/A",
-            expense_type, category, float(amount), payment_mode, description, date, "Completed", ""
+            expense_type, category, float(amount), payment_mode, description, date, "Completed", "", split_with_str
         ]
 
         loop = asyncio.get_event_loop()
@@ -317,7 +319,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("« Back to Main", callback_data='back_to_main')]
             ]
             await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard),
-                                         parse_mode="Markdown")
+                                          parse_mode="Markdown")
 
         except Exception as e:
             logger.error(f"Error in view_expenses: {e}")
@@ -401,22 +403,31 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Choose an option:", reply_markup=InlineKeyboardMarkup(keyboard))
 
     else:
+        # Category selection
         expense_type = "Personal" if query.data.startswith('personal') else "Split"
         category = query.data.replace('personal_', '').replace('split_', '').replace('_', ' ').title()
 
         context.user_data['expense_type'] = expense_type
         context.user_data['category'] = category
-        context.user_data['awaiting'] = 'amount'
 
         asyncio.create_task(log_chat_history_async(
             user.id, user.username, user.first_name,
             "Category Selected", f"{expense_type} - {category}"
         ))
 
-        await query.edit_message_text(
-            f"✅ Category: *{category}* ({expense_type})\n\n💵 Enter the amount (₹):",
-            parse_mode="Markdown"
-        )
+        if expense_type == "Split":
+            context.user_data['awaiting'] = 'names'
+            await query.edit_message_text(
+                f"✅ Category: *{category}* (Split)\n\n"
+                f"👥 Who are you splitting this with?\n\nEnter their names separated by commas (e.g., Amrit, Daksh, Dhruv)",
+                parse_mode="Markdown"
+            )
+        else:  # Personal expense
+            context.user_data['awaiting'] = 'amount'
+            await query.edit_message_text(
+                f"✅ Category: *{category}* (Personal)\n\n💵 Enter the amount (₹):",
+                parse_mode="Markdown"
+            )
 
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -428,7 +439,23 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text, chat_id=update.effective_chat.id, message_id=update.message.message_id
     ))
 
-    if context.user_data.get('awaiting') == 'amount':
+    if context.user_data.get('awaiting') == 'names':
+        names_text = text
+        names_list = [name.strip() for name in names_text.split(',')]
+        context.user_data['split_with'] = names_list
+        context.user_data['awaiting'] = 'amount'
+
+        asyncio.create_task(log_chat_history_async(
+            user.id, user.username, user.first_name, "Split Names Entered", ", ".join(names_list)
+        ))
+
+        await update.message.reply_text(
+            f"✅ Splitting with: *{', '.join(names_list)}*\n\n"
+            f"💵 Enter the *total* amount (₹):",
+            parse_mode="Markdown"
+        )
+
+    elif context.user_data.get('awaiting') == 'amount':
         try:
             amount = float(text)
             context.user_data['amount'] = amount
@@ -460,7 +487,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             category=context.user_data['category'],
             amount=context.user_data['amount'],
             payment_mode=context.user_data['payment_mode'],
-            description=description
+            description=description,
+            split_with=context.user_data.get('split_with')
         )
 
         if transaction_id:
@@ -515,7 +543,8 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             category=context.user_data['category'],
             amount=context.user_data['amount'],
             payment_mode=context.user_data['payment_mode'],
-            description=""
+            description="",
+            split_with=context.user_data.get('split_with')
         )
 
         if transaction_id:
@@ -566,17 +595,17 @@ def main():
         logger.error("BOT_TOKEN not found in environment!")
         return
 
-    app = Application.builder().token(TOKEN).build()
+    # Renamed the variable to avoid conflict with Flask app
+    telegram_app = Application.builder().token(TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(payment_handler, pattern='^(payment_|skip_description)'))
-    app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CallbackQueryHandler(payment_handler, pattern='^(payment_|skip_description)'))
+    telegram_app.add_handler(CallbackQueryHandler(button_handler))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
     logger.info("Bot is running...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
     main()
-
