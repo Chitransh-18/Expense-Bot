@@ -1,3 +1,5 @@
+from flask import Flask
+import threading
 import os
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -534,8 +536,26 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data.clear()
 
+# --- Web Server for Render Health Checks ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is alive!"
+
+def run_web_server():
+    # Get the port from the environment variable Render sets
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
+# -----------------------------------------
 
 def main():
+    # Start the web server in a separate thread
+    server_thread = threading.Thread(target=run_web_server)
+    server_thread.daemon = True
+    server_thread.start()
+
+    # --- The rest of your existing main function ---
     logger.info("Setting up Google Sheets...")
     sheet_url = setup_google_sheets()
     if not sheet_url:
@@ -559,3 +579,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
