@@ -123,10 +123,13 @@ async def save_expense_async(user_id, username, first_name, expense_type, catego
 
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, worksheet_expenses.append_row, row)
+        logger.info(f"Expense saved successfully: {transaction_id}")
 
+        # Clear cache and force next fetch to refresh
         global expense_cache, cache_last_updated
         expense_cache = []
         cache_last_updated = None
+        logger.info("Cache cleared after saving expense")
 
         await log_chat_history_async(
             user_id, username, first_name, "Expense Added",
@@ -135,25 +138,34 @@ async def save_expense_async(user_id, username, first_name, expense_type, catego
 
         return transaction_id
     except Exception as e:
-        logger.error(f"Error saving expense: {e}")
+        logger.error(f"Error saving expense: {e}", exc_info=True)
         return None
 
 
-async def get_user_expenses_async(user_id):
+async def get_user_expenses_async(user_id, force_refresh=False):
     """Get user's all expenses with caching"""
     global expense_cache, cache_last_updated
     try:
-        # Refresh cache if empty or older than 5 minutes
+        # Refresh cache if empty, forced, or older than 5 minutes
         now = datetime.now()
-        if not expense_cache or not cache_last_updated or (now - cache_last_updated).seconds > 300:
+        should_refresh = (
+            force_refresh or 
+            not expense_cache or 
+            not cache_last_updated or 
+            (now - cache_last_updated).seconds > 300
+        )
+        
+        if should_refresh:
             loop = asyncio.get_event_loop()
             expense_cache = await loop.run_in_executor(None, worksheet_expenses.get_all_records)
             cache_last_updated = now
+            logger.info(f"Cache refreshed. Total records: {len(expense_cache)}")
 
         user_expenses = [r for r in expense_cache if str(r.get('User ID', '')) == str(user_id)]
+        logger.info(f"Found {len(user_expenses)} expenses for user {user_id}")
         return user_expenses
     except Exception as e:
-        logger.error(f"Error fetching expenses: {e}")
+        logger.error(f"Error fetching expenses: {e}", exc_info=True)
         return []
 
 
@@ -291,12 +303,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "view_expenses":
         user_id = user.id
         try:
-            user_expenses = await get_user_expenses_async(user_id)
+            # Force refresh cache to get latest data
+            user_expenses = await get_user_expenses_async(user_id, force_refresh=True)
 
             if not user_expenses:
                 keyboard = get_main_menu_keyboard()
                 await query.edit_message_text(
-                    "📊 *Your Expenses*\n\nNo expenses recorded yet!",
+                    "📊 *Your Expenses*\n\nNo expenses recorded yet!\n\nStart tracking by selecting an option below:",
                     reply_markup=InlineKeyboardMarkup(keyboard),
                     parse_mode="Markdown"
                 )
@@ -314,7 +327,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             categories = {}
             for exp in user_expenses:
                 cat = exp.get('Category', 'Unknown')
-                categories[cat] = categories.get(cat, 0) + float(exp.get('Amount', 0))
+                if cat:
+                    categories[cat] = categories.get(cat, 0) + float(exp.get('Amount', 0))
 
             top_categories = sorted(categories.items(), key=lambda x: x[1], reverse=True)[:3]
             recent = user_expenses[-5:] if len(user_expenses) > 5 else user_expenses
@@ -338,39 +352,51 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     message += f"📱 UPI: ₹{upi_total:,.2f}\n"
                 message += "\n"
 
-            message += f"*Top Categories:*\n"
-            for cat, amt in top_categories:
-                message += f"• {cat}: ₹{amt:,.2f}\n"
+            if top_categories:
+                message += f"*Top Categories:*\n"
+                for cat, amt in top_categories:
+                    message += f"• {cat}: ₹{amt:,.2f}\n"
+                message += "\n"
 
-            message += f"\n*Recent Transactions:*\n"
+            message += f"*Recent Transactions:*\n"
             for exp in recent:
                 payment_icon = {"Cash": "💵", "Online": "🌐", "Card": "💳", "Upi": "📱"}.get(
-                    exp.get('Payment Mode'), "💰")
+                    exp.get('Payment Mode', ''), "💰")
                 desc = f" - {exp.get('Description', '')}" if exp.get('Description') else ""
-                message += f"{payment_icon} ₹{exp.get('Amount', 0)} - {exp.get('Category', 'Unknown')} ({exp.get('Date', '')}){desc}\n"
+                amount_val = exp.get('Amount', 0)
+                category_val = exp.get('Category', 'Unknown')
+                date_val = exp.get('Date', '')
+                message += f"{payment_icon} ₹{amount_val} - {category_val} ({date_val}){desc}\n"
 
             keyboard = get_main_menu_keyboard()
             await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard),
                                           parse_mode="Markdown")
 
         except Exception as e:
-            logger.error(f"Error in view_expenses: {e}")
+            logger.error(f"Error in view_expenses: {e}", exc_info=True)
             keyboard = get_main_menu_keyboard()
             await query.edit_message_text(
-                f"❌ Error fetching expenses. Please try again.",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                f"📊 *Your Expenses*\n\n"
+                f"⚠️ Having trouble loading your expenses right now.\n\n"
+                f"This might be due to:\n"
+                f"• Temporary connection issue\n"
+                f"• Google Sheets sync delay\n\n"
+                f"Please try again in a moment, or check Transaction History.",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
             )
 
     elif query.data == "transaction_history":
         try:
-            user_expenses = await get_user_expenses_async(user.id)
+            # Force refresh to get latest data
+            user_expenses = await get_user_expenses_async(user.id, force_refresh=True)
             history = user_expenses[-15:] if len(user_expenses) > 15 else user_expenses
             history.reverse()
 
             if not history:
                 keyboard = get_main_menu_keyboard()
                 await query.edit_message_text(
-                    "📜 *Transaction History*\n\nNo transactions yet!",
+                    "📜 *Transaction History*\n\nNo transactions yet!\n\nStart tracking by selecting an option below:",
                     reply_markup=InlineKeyboardMarkup(keyboard),
                     parse_mode="Markdown"
                 )
@@ -396,11 +422,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         
         except Exception as e:
-            logger.error(f"Error in transaction_history: {e}")
+            logger.error(f"Error in transaction_history: {e}", exc_info=True)
             keyboard = get_main_menu_keyboard()
             await query.edit_message_text(
-                f"❌ Error fetching transaction history. Please try again.",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                f"📜 *Transaction History*\n\n"
+                f"⚠️ Having trouble loading your transaction history right now.\n\n"
+                f"Please try again in a moment.",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
             )
 
     elif query.data == "chat_history":
