@@ -50,10 +50,13 @@ def setup_google_sheets():
         # Open or create spreadsheet
         try:
             spreadsheet = gc.open(SPREADSHEET_NAME)
+            logger.info(f"Successfully opened existing spreadsheet: {SPREADSHEET_NAME}")
         except gspread.SpreadsheetNotFound:
             spreadsheet = gc.create(SPREADSHEET_NAME)
-            # Share with your email
-            spreadsheet.share(os.environ.get("OWNER_EMAIL"), perm_type='user', role='writer')
+            # Share with owner email if provided
+            owner_email = os.environ.get("OWNER_EMAIL")
+            if owner_email:
+                spreadsheet.share(owner_email, perm_type='user', role='writer')
             logger.info(f"Created new spreadsheet: {SPREADSHEET_NAME}")
 
         # Setup Expenses worksheet
@@ -170,7 +173,6 @@ async def get_user_chat_log_async(user_id, limit=20):
         return []
 
 
-# Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
@@ -202,7 +204,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# Button handler (keeping core logic, replacing sync calls with async)
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user = query.from_user
@@ -264,26 +265,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-            # Calculate totals
             total = sum(float(r['Amount']) for r in user_expenses)
             personal_total = sum(float(r['Amount']) for r in user_expenses if r['Expense Type'] == 'Personal')
             split_total = sum(float(r['Amount']) for r in user_expenses if r['Expense Type'] == 'Split')
 
-            # Payment mode breakdown
             cash_total = sum(float(r['Amount']) for r in user_expenses if r.get('Payment Mode') == 'Cash')
             online_total = sum(float(r['Amount']) for r in user_expenses if r.get('Payment Mode') == 'Online')
             card_total = sum(float(r['Amount']) for r in user_expenses if r.get('Payment Mode') == 'Card')
             upi_total = sum(float(r['Amount']) for r in user_expenses if r.get('Payment Mode') == 'Upi')
 
-            # Category breakdown
             categories = {}
             for exp in user_expenses:
                 cat = exp['Category']
                 categories[cat] = categories.get(cat, 0) + float(exp['Amount'])
 
             top_categories = sorted(categories.items(), key=lambda x: x[1], reverse=True)[:3]
-
-            # Get last 5 expenses
             recent = user_expenses[-5:]
             recent.reverse()
 
@@ -309,7 +305,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             message += f"\n*Recent Transactions:*\n"
             for exp in recent:
-                payment_icon = {"Cash": "💵", "Online": "🌐", "Card": "💳", "Upi": "📱"}.get(exp.get('Payment Mode'), "💰")
+                payment_icon = {"Cash": "💵", "Online": "🌐", "Card": "💳", "Upi": "📱"}.get(
+                    exp.get('Payment Mode'), "💰")
                 desc = f" - {exp['Description']}" if exp['Description'] else ""
                 message += f"{payment_icon} ₹{exp['Amount']} - {exp['Category']} ({exp['Date']}){desc}\n"
 
@@ -317,7 +314,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("Full History 📜", callback_data='transaction_history')],
                 [InlineKeyboardButton("« Back to Main", callback_data='back_to_main')]
             ]
-            await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard),
+                                         parse_mode="Markdown")
 
         except Exception as e:
             logger.error(f"Error in view_expenses: {e}")
@@ -401,7 +399,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Choose an option:", reply_markup=InlineKeyboardMarkup(keyboard))
 
     else:
-        # Category selection
         expense_type = "Personal" if query.data.startswith('personal') else "Split"
         category = query.data.replace('personal_', '').replace('split_', '').replace('_', ' ').title()
 
@@ -466,8 +463,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if transaction_id:
             short_id = transaction_id[-8:]
-            payment_icon = {"Cash": "💵", "Online": "🌐", "Card": "💳", "Upi": "📱"}.get(context.user_data['payment_mode'],
-                                                                                     "💰")
+            payment_icon = {"Cash": "💵", "Online": "🌐", "Card": "💳", "Upi": "📱"}.get(
+                context.user_data['payment_mode'], "💰")
             await update.message.reply_text(
                 f"✅ *Expense Saved!*\n\n"
                 f"🏷️ Category: {context.user_data['category']}\n"
@@ -521,8 +518,8 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if transaction_id:
             short_id = transaction_id[-8:]
-            payment_icon = {"Cash": "💵", "Online": "🌐", "Card": "💳", "Upi": "📱"}.get(context.user_data['payment_mode'],
-                                                                                     "💰")
+            payment_icon = {"Cash": "💵", "Online": "🌐", "Card": "💳", "Upi": "📱"}.get(
+                context.user_data['payment_mode'], "💰")
             await query.edit_message_text(
                 f"✅ *Expense Saved!*\n\n"
                 f"🏷️ Category: {context.user_data['category']}\n"
