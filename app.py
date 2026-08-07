@@ -84,24 +84,17 @@ def test_smtp():
     if not (host and user and password):
         return jsonify({"success": False, "error": "SMTP variables not fully set"})
 
-    try:
-        if port == 465:
-            server = smtplib.SMTP_SSL(host, port, timeout=10)
-        else:
-            server = smtplib.SMTP(host, port, timeout=10)
-            server.starttls()
-
-        server.login(user, password)
-        server.quit()
+    success, err_msg = send_otp_email(user, "999999")
+    if success:
         return jsonify({
             "success": True,
-            "message": f"Successfully connected & authenticated with Gmail SMTP ({user})!"
+            "message": f"Successfully connected & sent test OTP email to {user}!"
         })
-    except Exception as e:
+    else:
         return jsonify({
             "success": False,
-            "error_type": type(e).__name__,
-            "error_detail": str(e),
+            "error_type": "SMTPError",
+            "error_detail": err_msg,
             "smtp_user": user,
             "smtp_pass_length": len(password)
         }), 400

@@ -1,7 +1,22 @@
 import os
+import socket
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
+# Force socket to resolve IPv4 addresses first (prevents Errno 101 Network is Unreachable on cloud IPv6 containers)
+orig_getaddrinfo = socket.getaddrinfo
+def getaddrinfo_ipv4_only(host, port, family=0, type=0, proto=0, flags=0):
+    try:
+        # Request IPv4 AF_INET specifically
+        res = orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+        if res:
+            return res
+    except Exception:
+        pass
+    return orig_getaddrinfo(host, port, family, type, proto, flags)
+
+socket.getaddrinfo = getaddrinfo_ipv4_only
 
 def get_smtp_config():
     """Dynamically fetch current SMTP credentials from environment with robust string sanitization"""
@@ -75,11 +90,11 @@ def send_otp_email(recipient_email: str, otp_code: str):
 
     for p in ports_to_try:
         try:
-            print(f"Attempting SMTP connection to {host}:{p}...")
+            print(f"Attempting SMTP connection to {host}:{p} (IPv4)...")
             if p == 465:
-                server = smtplib.SMTP_SSL(host, p, timeout=8)
+                server = smtplib.SMTP_SSL(host, p, timeout=10)
             else:
-                server = smtplib.SMTP(host, p, timeout=8)
+                server = smtplib.SMTP(host, p, timeout=10)
                 server.starttls()
 
             server.login(user, password)
