@@ -3,6 +3,7 @@ import socket
 import smtplib
 import json
 import urllib.request
+import urllib.error
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -30,7 +31,7 @@ def get_smtp_config():
 
     user = os.environ.get("SMTP_USER", "").strip().strip("'\"")
     password = os.environ.get("SMTP_PASS", "").strip().strip("'\"").replace(" ", "")
-    sender = os.environ.get("SMTP_FROM", f"ExpenseTracker Pro <{user}>" if user else "ExpenseTracker Pro <noreply@expensetracker.app>").strip().strip("'\"")
+    sender = os.environ.get("SMTP_FROM", "").strip().strip("'\"")
     
     brevo_key = os.environ.get("BREVO_API_KEY", "").strip().strip("'\"")
     resend_key = os.environ.get("RESEND_API_KEY", "").strip().strip("'\"")
@@ -48,18 +49,26 @@ def is_smtp_configured() -> bool:
     host, port, user, password, sender, brevo_key, resend_key = get_smtp_config()
     return bool((host and user and password) or brevo_key or resend_key)
 
-def send_via_brevo(api_key: str, sender_email: str, recipient_email: str, otp_code: str):
+def send_via_brevo(api_key: str, user_email: str, sender_override: str, recipient_email: str, otp_code: str):
     """Send HTML OTP email via Brevo HTTPS API (Port 443 - Unblocked on Render)"""
     try:
+        # Sender email must be valid format; default to user_email if available
+        from_email = user_email if (user_email and "@" in user_email) else recipient_email
+        if sender_override and "@" in sender_override:
+            if "<" in sender_override and ">" in sender_override:
+                from_email = sender_override.split("<")[1].split(">")[0].strip()
+            else:
+                from_email = sender_override.strip()
+
         url = "https://api.brevo.com/v3/smtp/email"
         payload = {
-            "sender": {"name": "ExpenseTracker Pro", "email": sender_email or "noreply@expensetracker.app"},
+            "sender": {"name": "ExpenseTracker Pro", "email": from_email},
             "to": [{"email": recipient_email}],
             "subject": f"🔑 {otp_code} is your ExpenseTracker Pro Verification Code",
             "htmlContent": f"""
             <div style="font-family: sans-serif; background: #0f172a; color: #fff; padding: 30px; border-radius: 16px; text-align: center; max-width: 480px; margin: 0 auto;">
               <h2 style="color: #6366f1;">ExpenseTracker Pro</h2>
-              <h3>Verification Code</h3>
+              <h3 style="color: #cbd5e1;">Verification Code</h3>
               <div style="background: rgba(99,102,241,0.2); border: 1px dashed #6366f1; padding: 16px; font-size: 32px; font-weight: bold; color: #06b6d4; letter-spacing: 6px; margin: 20px 0;">{otp_code}</div>
               <p style="color: #94a3b8; font-size: 13px;">This code will expire in 10 minutes.</p>
             </div>
@@ -75,17 +84,23 @@ def send_via_brevo(api_key: str, sender_email: str, recipient_email: str, otp_co
             if resp.status in (200, 201):
                 print(f"✅ OTP email sent via Brevo HTTPS API to {recipient_email}")
                 return True, ""
+    except urllib.error.HTTPError as he:
+        body = he.read().decode("utf-8", errors="ignore")
+        err_msg = f"Brevo HTTP {he.code}: {body}"
+        print(f"⚠️ Brevo API Error: {err_msg}")
+        return False, err_msg
     except Exception as e:
-        print(f"⚠️ Brevo HTTPS API failed: {e}")
-        return False, f"Brevo API error: {e}"
+        err_msg = f"Brevo Exception: {str(e)}"
+        print(f"⚠️ Brevo API Exception: {err_msg}")
+        return False, err_msg
     return False, "Brevo API unknown error"
 
-def send_via_resend(api_key: str, sender_email: str, recipient_email: str, otp_code: str):
+def send_via_resend(api_key: str, user_email: str, recipient_email: str, otp_code: str):
     """Send HTML OTP email via Resend HTTPS API (Port 443 - Unblocked on Render)"""
     try:
         url = "https://api.resend.com/emails"
         payload = {
-            "from": sender_email or "onboarding@resend.dev",
+            "from": "ExpenseTracker Pro <onboarding@resend.dev>",
             "to": [recipient_email],
             "subject": f"🔑 {otp_code} is your ExpenseTracker Pro Verification Code",
             "html": f"""
@@ -106,8 +121,10 @@ def send_via_resend(api_key: str, sender_email: str, recipient_email: str, otp_c
             if resp.status in (200, 201):
                 print(f"✅ OTP email sent via Resend HTTPS API to {recipient_email}")
                 return True, ""
+    except urllib.error.HTTPError as he:
+        body = he.read().decode("utf-8", errors="ignore")
+        return False, f"Resend HTTP {he.code}: {body}"
     except Exception as e:
-        print(f"⚠️ Resend HTTPS API failed: {e}")
         return False, f"Resend API error: {e}"
     return False, "Resend API unknown error"
 
@@ -124,18 +141,23 @@ def send_otp_email(recipient_email: str, otp_code: str):
 
     # Try Brevo HTTPS API if key present
     if brevo_key:
-        ok, err = send_via_brevo(brevo_key, sender or user, recipient_email, otp_code)
+        ok, err = send_via_brevo(brevo_key, user, sender, recipient_email, otp_code)
         if ok: return True, ""
+        # If Brevo key was explicitly set, return the Brevo API error details
+        if password.startswith("xkeysib-") or os.environ.get("BREVO_API_KEY"):
+            return False, err
 
     # Try Resend HTTPS API if key present
     if resend_key:
-        ok, err = send_via_resend(resend_key, sender or user, recipient_email, otp_code)
+        ok, err = send_via_resend(resend_key, user, recipient_email, otp_code)
         if ok: return True, ""
+        if password.startswith("re_") or os.environ.get("RESEND_API_KEY"):
+            return False, err
 
-    # Try SMTP Protocol
+    # Try SMTP Protocol Fallback
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"🔑 {otp_code} is your ExpenseTracker Pro Verification Code"
-    msg["From"] = sender
+    msg["From"] = sender or user or "noreply@expensetracker.app"
     msg["To"] = recipient_email
 
     html_body = f"""
@@ -182,7 +204,7 @@ def send_otp_email(recipient_email: str, otp_code: str):
                 server.starttls()
 
             server.login(user, password)
-            server.sendmail(sender, [recipient_email], msg.as_string())
+            server.sendmail(sender or user, [recipient_email], msg.as_string())
             server.quit()
             print(f"✅ OTP email sent successfully to {recipient_email} via port {p}")
             return True, ""
