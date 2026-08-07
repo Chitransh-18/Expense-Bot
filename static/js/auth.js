@@ -2,7 +2,7 @@ const Auth = {
   currentEmail: '',
   currentFullName: '',
   step: 'email', // 'email' or 'otp'
-  debugOTP: '',
+  devNotice: '',
 
   renderAuthPage() {
     const mainContent = document.getElementById('view-container');
@@ -44,12 +44,12 @@ const Auth = {
             <div style="text-align: center; margin-bottom: 1.8rem;">
               <div class="brand-icon" style="width: 56px; height: 56px; margin: 0 auto 1.2rem auto; font-size: 1.8rem; background: linear-gradient(135deg, var(--cyan), var(--primary));">📲</div>
               <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem;">Enter Verification Code</h2>
-              <p style="color: var(--text-muted); font-size: 0.95rem;">We sent a 6-digit OTP to <strong style="color: var(--cyan);">${this.currentEmail}</strong></p>
+              <p style="color: var(--text-muted); font-size: 0.95rem;">We sent a 6-digit OTP code to <strong style="color: var(--cyan);">${this.currentEmail}</strong></p>
             </div>
 
-            ${this.debugOTP ? `
-              <div style="background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.35); border-radius: var(--radius-md); padding: 0.8rem; text-align: center; margin-bottom: 1.5rem;">
-                <span style="font-size: 0.85rem; color: var(--cyan);">Local Testing OTP Code: <strong style="font-size: 1.1rem; letter-spacing: 2px;">${this.debugOTP}</strong></span>
+            ${this.devNotice ? `
+              <div style="background: rgba(6, 182, 212, 0.12); border: 1px dashed rgba(6, 182, 212, 0.4); border-radius: var(--radius-md); padding: 0.8rem; text-align: center; margin-bottom: 1.5rem; font-size: 0.82rem; color: var(--cyan);">
+                💡 <strong>Dev Mode:</strong> ${this.devNotice}
               </div>
             ` : ''}
 
@@ -77,15 +77,6 @@ const Auth = {
           </div>
         </div>
       `;
-
-      if (this.debugOTP) {
-        setTimeout(() => {
-          const boxes = document.querySelectorAll('.otp-box');
-          for (let i = 0; i < 6 && i < this.debugOTP.length; i++) {
-            if (boxes[i]) boxes[i].value = this.debugOTP[i];
-          }
-        }, 100);
-      }
     }
   },
 
@@ -105,7 +96,7 @@ const Auth = {
         body: JSON.stringify({ email: this.currentEmail, full_name: this.currentFullName })
       });
 
-      this.debugOTP = res.otp_debug || '';
+      this.devNotice = res.dev_notice || '';
       this.step = 'otp';
       this.renderAuthPage();
     } catch (err) {

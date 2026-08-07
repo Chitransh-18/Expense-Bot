@@ -12,6 +12,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from config import SECRET_KEY, PORT, DEBUG
 from database import init_db, get_db
+from services.email_service import send_otp_email, is_smtp_configured
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 CORS(app)
@@ -90,15 +91,20 @@ def send_otp():
     conn.commit()
     conn.close()
 
-    print(f"\n==========================================")
-    print(f"🔑 OTP Code for {email}: {otp_code}")
-    print(f"==========================================\n")
+    # Dispatch Email OTP
+    sent_via_email = send_otp_email(email, otp_code)
 
-    return jsonify({
+    res_data = {
         "message": f"OTP Verification Code sent to {email}",
         "email": email,
-        "otp_debug": otp_code  # Returned for easy local testing/auto-fill
-    })
+        "email_sent": sent_via_email
+    }
+
+    # Only supply debug code if SMTP is unconfigured for local dev
+    if not is_smtp_configured():
+        res_data["dev_notice"] = "SMTP not configured. OTP printed to server console."
+
+    return jsonify(res_data)
 
 @app.route("/api/auth/verify-otp", methods=["POST"])
 def verify_otp():
