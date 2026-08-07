@@ -3,30 +3,35 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# Load SMTP Credentials from Environment
-SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASS = os.environ.get("SMTP_PASS", "").replace(" ", "") # Remove spaces from app password if present
-SMTP_FROM = os.environ.get("SMTP_FROM", "ExpenseTracker Pro <noreply@expensetracker.app>")
+def get_smtp_config():
+    """Dynamically fetch current SMTP credentials from environment"""
+    host = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    user = os.environ.get("SMTP_USER", "").strip()
+    password = os.environ.get("SMTP_PASS", "").strip().replace(" ", "")
+    sender = os.environ.get("SMTP_FROM", f"ExpenseTracker Pro <{user}>" if user else "ExpenseTracker Pro <noreply@expensetracker.app>").strip()
+    return host, port, user, password, sender
 
 def is_smtp_configured() -> bool:
     """Check if SMTP credentials are configured"""
-    return bool(SMTP_HOST and SMTP_USER and SMTP_PASS)
+    host, port, user, password, sender = get_smtp_config()
+    return bool(host and user and password)
 
 def send_otp_email(recipient_email: str, otp_code: str):
     """
     Send formatted HTML OTP Verification Email via SMTP with timeout handling.
     Returns (success: bool, error_message: str) tuple.
     """
-    if not is_smtp_configured():
+    host, port, user, password, sender = get_smtp_config()
+
+    if not (host and user and password):
         print(f"\n[DEV MODE] SMTP not configured. OTP for {recipient_email}: {otp_code}\n")
         return False, "SMTP credentials not configured"
 
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = f"🔑 {otp_code} is your ExpenseTracker Pro Verification Code"
-        msg["From"] = SMTP_FROM or SMTP_USER
+        msg["From"] = sender
         msg["To"] = recipient_email
 
         html_body = f"""
@@ -60,17 +65,14 @@ def send_otp_email(recipient_email: str, otp_code: str):
 
         msg.attach(MIMEText(html_body, "html"))
 
-        clean_user = SMTP_USER.strip()
-        clean_pass = SMTP_PASS.strip().replace(" ", "")
-
-        if SMTP_PORT == 465:
-            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10)
+        if port == 465:
+            server = smtplib.SMTP_SSL(host, port, timeout=10)
         else:
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
+            server = smtplib.SMTP(host, port, timeout=10)
             server.starttls()
 
-        server.login(clean_user, clean_pass)
-        server.sendmail(SMTP_FROM or clean_user, [recipient_email], msg.as_string())
+        server.login(user, password)
+        server.sendmail(sender, [recipient_email], msg.as_string())
         server.quit()
 
         print(f"✅ OTP email sent successfully to {recipient_email}")
