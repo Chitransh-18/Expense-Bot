@@ -1,33 +1,39 @@
-# 💰 ExpenseTracker Pro: Downloadable Web App (PWA) with Split Reminders & Recurring Bill Manager
+# 💰 ExpenseTracker Pro: Downloadable Web App (PWA) with OTP Auth & Bill Manager
 
 [![PWA Ready](https://img.shields.io/badge/PWA-Installable-blue.svg)](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps)
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Flask API](https://img.shields.io/badge/Flask-v3.0-green)](https://flask.palletsprojects.com/)
+[![Docker Supported](https://img.shields.io/badge/Docker-PostgreSQL-blue)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**ExpenseTracker Pro** is a modern, installable Progressive Web Application (PWA) designed for tracking personal spending, split expenses, recurring monthly subscriptions (like YouTube Family Premium paid by Daksh every 3rd of the month, Wi-Fi, Rent), and sending instant split reminders via WhatsApp or native device sharing.
+**ExpenseTracker Pro** is a modern, installable Progressive Web Application (PWA) built for tracking personal spending, split expenses with friends, recurring monthly subscriptions (like YouTube Family Premium paid by Daksh on the 3rd of every month, Wi-Fi, Rent), 6-digit OTP verified authentication, and automated split reminders via WhatsApp or native share.
 
 ---
 
-## ✨ Key Features
+## ✨ Features
 
-- 📱 **Downloadable & Installable (PWA)**:
+- 📱 **Installable Progressive Web App (PWA)**:
   - Add to Home Screen on iOS, Android, Windows, and macOS.
   - Native standalone app feel with offline asset caching (`sw.js` Service Worker).
-- 🔒 **User Authentication**:
-  - Secure signup, sign-in, and password hashing (`werkzeug.security`) with 30-day persistent sessions.
+- 🔑 **6-Digit OTP Verified Authentication**:
+  - Secure sign in and registration via 6-digit verification code.
+  - Real HTML Email OTP sending via SMTP (Gmail, SendGrid, Amazon SES) with automatic fallback to local Dev Mode.
+- 🌅 **Time-Aware Personalized Greetings**:
+  - Dynamic local-time greeting on your dashboard: *Good morning 🌅*, *Good afternoon ☀️*, *Good evening 🌇*, *Good night 🌙*.
 - 📅 **Recurring Monthly Bills & Subscription Manager**:
-  - Track recurring monthly bills like **YouTube Family Premium** (paid by Daksh on the **3rd of every month**), Wi-Fi, Rent, Netflix.
-  - Automatic due status alerts (**Due Today 🚨**, **Overdue**, **Upcoming**).
-  - One-click **"Mark Paid"** and **"📲 Remind Daksh"** via WhatsApp.
+  - Track monthly recurring bills like **YouTube Family Premium** (paid by Daksh on the **3rd of every month**), Wi-Fi, Rent, Netflix.
+  - Automatic due alerts (**Due Today 🚨**, **Overdue**, **Upcoming**).
+  - One-click **"Mark Paid"** (auto-settles & logs expense) and **"📲 Remind Daksh"** via WhatsApp.
+- 📊 **Interactive Monthly Expenditure Reports**:
+  - Breakdown of total monthly spent, Personal vs Split ratio, top spending categories, and largest single transaction of the month.
 - 💰 **Personal & Split Expense Logging**:
-  - Log expenses with category tags, payment mode (UPI, Cash, Online, Card), and custom split member details.
+  - Log expenses with category tags, payment modes (UPI, Cash, Online, Card), and custom split member details.
 - 🔔 **Split Reminder Generator**:
   - Send formatted reminder messages to friends via **WhatsApp Share**, **Native Share Drawer**, or Copy text.
-- 📊 **Rich Glassmorphic Dashboard**:
-  - Modern dark-mode design system with gradient accents, spending breakdown progress bars, and stats cards.
+- ✨ **Fintech Glassmorphic UI**:
+  - Multi-layered dark glass cards with ambient glowing mesh gradients, status badges, and mobile-responsive navigation.
 - 📄 **Data Export**:
-  - One-click CSV export of your entire transaction history.
+  - One-click CSV export of your full transaction history.
 
 ---
 
@@ -35,23 +41,35 @@
 
 ```
 Expense-Tracker-App/
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # GitHub Actions Automated CI Build & Syntax Check
 ├── app.py                      # Flask REST API backend & static file server
 ├── config.py                   # App configuration & JWT secret key
-├── database.py                 # SQLite database schema & connection helper
-├── requirements.txt            # Python dependencies (Flask, Flask-CORS, PyJWT, Werkzeug)
+├── database.py                 # SQLite / PostgreSQL auto-initializer
+├── requirements.txt            # Python dependencies (Flask, Flask-CORS, PyJWT, Werkzeug, gunicorn)
+├── Dockerfile                  # Container definition for web app
+├── docker-compose.yml          # Multi-container orchestration (Web App + PostgreSQL)
+├── Procfile                    # Production WSGI server command (gunicorn app:app)
+├── render.yaml                 # 1-Click Render Cloud Deployment Blueprint (plan: free)
 ├── README.md                   # Documentation & setup guide
-├── database.sqlite             # Local SQLite database (created automatically)
+├── CONTRIBUTING.md             # Open-source contribution guidelines
+├── SECURITY.md                 # Vulnerability reporting guidelines
+├── LICENSE                     # MIT Open Source License
+├── .env.example                # Environment variables template
+├── services/
+│   └── email_service.py        # Real SMTP HTML Email OTP Dispatcher
 └── static/                     # PWA Frontend Assets
     ├── index.html              # Single Page App structure & meta tags
     ├── manifest.json           # Web App Manifest for app installation
     ├── sw.js                   # Service Worker for offline asset caching
     ├── css/
-    │   └── style.css           # Glassmorphism CSS design system
+    │   └── style.css           # Glassmorphism CSS design system & OTP styling
     └── js/
         ├── api.js              # Token management & fetch wrapper
         ├── pwa.js              # Service Worker & PWA Install prompt handler
-        ├── auth.js             # Sign up & Sign in UI logic
-        ├── dashboard.js        # Overview stats, top categories, & urgent bill alerts
+        ├── auth.js             # 6-Digit OTP Sign in UI & auto-advance inputs
+        ├── dashboard.js        # Overview stats, time greeting, & monthly report modal
         ├── expenses.js         # Log & view personal/split expenses
         ├── recurring.js        # Recurring monthly bills manager (YouTube, Wi-Fi, Rent)
         ├── reminders.js        # Split reminder builder (WhatsApp & Native Share)
@@ -64,7 +82,7 @@ Expense-Tracker-App/
 
 ### Prerequisites
 
-- **Python 3.9 or higher**
+- **Python 3.9 or higher** (or Docker Desktop)
 
 ### Step-by-step Execution
 
@@ -84,7 +102,7 @@ Expense-Tracker-App/
    python database.py
    ```
 
-4. **Launch the Web Application Server**:
+4. **Launch the Server**:
    ```bash
    python app.py
    ```
@@ -97,19 +115,46 @@ Expense-Tracker-App/
 
 ---
 
-## 📲 How to Install on Your Device (PWA)
+## 🐳 Running with Docker Compose (PostgreSQL)
 
-### On Android / Chrome:
-- Click the **"📱 Install App"** button on the top bar or sidebar, or open browser menu (⋮) -> select **"Add to Home screen"**.
+To run the full stack with a dedicated **PostgreSQL** database container:
 
-### On iPhone / iOS Safari:
-- Open `http://<your-host>:5000` in Safari -> tap the **Share** button -> select **"Add to Home Screen"**.
+```bash
+docker-compose up --build
+```
 
-### On Desktop (Chrome / Edge / Brave):
-- Click the **Install** icon in the browser address bar or click **"📱 Install App"** inside the dashboard.
+Access the app in your browser at `http://localhost:5000`.
+
+---
+
+## ☁️ 24/7 Cloud Deployment Guide
+
+### Deploy on Render.com (100% Free - No Credit Card Required)
+
+1. Sign up on [dashboard.render.com](https://dashboard.render.com/).
+2. Click **New +** ➔ Select **Web Service**.
+3. Connect your repository `Chitransh-18/Expense-Bot`.
+4. Select **Free ($0/mo)** instance type.
+5. Click **Create Web Service**! Render will deploy your live 24/7 HTTPS URL.
+
+---
+
+## 📱 How to Install on Your Device (PWA)
+
+### Android / Chrome:
+- Click the **"📱 Install App"** button inside the top bar, or open browser menu (⋮) ➔ **"Add to Home screen"**.
+
+### iPhone / iOS Safari:
+- Open your live site in Safari ➔ tap the **Share** button ➔ select **"Add to Home Screen"**.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please check out [CONTRIBUTING.md](CONTRIBUTING.md) for details on setting up local virtual environments, submitting Pull Requests, and reporting vulnerabilities.
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
