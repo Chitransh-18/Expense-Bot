@@ -67,36 +67,38 @@ def static_files(path):
 # --- Diagnostic Routes ---
 @app.route("/api/debug/smtp", methods=["GET"])
 def debug_smtp():
-    host, port, user, password, sender = get_smtp_config()
+    host, port, user, password, sender, brevo_key, resend_key = get_smtp_config()
     return jsonify({
-        "configured": bool(host and user and password),
+        "configured": is_smtp_configured(),
         "host": host,
         "port": port,
         "user_set": bool(user),
         "user_masked": f"{user[:3]}***@{user.split('@')[-1]}" if "@" in user else bool(user),
         "pass_set": bool(password),
-        "pass_length": len(password)
+        "brevo_key_set": bool(brevo_key),
+        "resend_key_set": bool(resend_key)
     })
 
 @app.route("/api/test-smtp", methods=["GET"])
 def test_smtp():
-    host, port, user, password, sender = get_smtp_config()
-    if not (host and user and password):
-        return jsonify({"success": False, "error": "SMTP variables not fully set"})
+    host, port, user, password, sender, brevo_key, resend_key = get_smtp_config()
+    if not is_smtp_configured():
+        return jsonify({"success": False, "error": "Email service variables not fully set"})
 
-    success, err_msg = send_otp_email(user, "999999")
+    target = user if (user and "@" in user) else "test@example.com"
+    success, err_msg = send_otp_email(target, "999999")
     if success:
         return jsonify({
             "success": True,
-            "message": f"Successfully connected & sent test OTP email to {user}!"
+            "message": f"Successfully connected & sent test OTP email to {target}!"
         })
     else:
         return jsonify({
             "success": False,
-            "error_type": "SMTPError",
+            "error_type": "EmailError",
             "error_detail": err_msg,
-            "smtp_user": user,
-            "smtp_pass_length": len(password)
+            "user": user,
+            "brevo_key_set": bool(brevo_key)
         }), 400
 
 # --- OTP Verified Authentication API Routes ---
