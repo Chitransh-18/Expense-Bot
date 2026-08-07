@@ -4,6 +4,7 @@ import csv
 import jwt
 import random
 import sqlite3
+import smtplib
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory, Response
