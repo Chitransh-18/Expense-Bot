@@ -4,12 +4,17 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 def get_smtp_config():
-    """Dynamically fetch current SMTP credentials from environment"""
-    host = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
-    port = int(os.environ.get("SMTP_PORT", "587"))
-    user = os.environ.get("SMTP_USER", "").strip()
-    password = os.environ.get("SMTP_PASS", "").strip().replace(" ", "")
-    sender = os.environ.get("SMTP_FROM", f"ExpenseTracker Pro <{user}>" if user else "ExpenseTracker Pro <noreply@expensetracker.app>").strip()
+    """Dynamically fetch current SMTP credentials from environment with robust string sanitization"""
+    host = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip().strip("'\"")
+    port_str = os.environ.get("SMTP_PORT", "587").strip().strip("'\"")
+    try:
+        port = int(port_str)
+    except ValueError:
+        port = 587
+
+    user = os.environ.get("SMTP_USER", "").strip().strip("'\"")
+    password = os.environ.get("SMTP_PASS", "").strip().strip("'\"").replace(" ", "")
+    sender = os.environ.get("SMTP_FROM", f"ExpenseTracker Pro <{user}>" if user else "ExpenseTracker Pro <noreply@expensetracker.app>").strip().strip("'\"")
     return host, port, user, password, sender
 
 def is_smtp_configured() -> bool:
@@ -25,8 +30,8 @@ def send_otp_email(recipient_email: str, otp_code: str):
     host, port, user, password, sender = get_smtp_config()
 
     if not (host and user and password):
-        print(f"\n[DEV MODE] SMTP not configured. OTP for {recipient_email}: {otp_code}\n")
-        return False, "SMTP credentials not configured"
+        print(f"\n[DEV MODE] SMTP not configured. Missing: host={bool(host)}, user={bool(user)}, pass={bool(password)}\n")
+        return False, f"SMTP unconfigured (host={bool(host)}, user={bool(user)}, pass={bool(password)})"
 
     try:
         msg = MIMEMultipart("alternative")

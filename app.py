@@ -12,7 +12,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from config import SECRET_KEY, PORT, DEBUG
 from database import init_db, get_db
-from services.email_service import send_otp_email, is_smtp_configured
+from services.email_service import send_otp_email, is_smtp_configured, get_smtp_config
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 CORS(app)
@@ -62,6 +62,20 @@ def static_files(path):
     if path.startswith("api/"):
         return jsonify({"error": "API route not found"}), 404
     return send_from_directory("static", path)
+
+# --- Diagnostic Route ---
+@app.route("/api/debug/smtp", methods=["GET"])
+def debug_smtp():
+    host, port, user, password, sender = get_smtp_config()
+    return jsonify({
+        "configured": bool(host and user and password),
+        "host": host,
+        "port": port,
+        "user_set": bool(user),
+        "user_masked": f"{user[:3]}***@{user.split('@')[-1]}" if "@" in user else bool(user),
+        "pass_set": bool(password),
+        "pass_length": len(password)
+    })
 
 # --- OTP Verified Authentication API Routes ---
 
