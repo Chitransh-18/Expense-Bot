@@ -1,5 +1,6 @@
 # 💰 ExpenseTracker Pro: Downloadable Web App (PWA) with OTP Auth & Bill Manager
 
+[![Live Demo](https://img.shields.io/badge/Live%20App-expense--bot--1--jyl4.onrender.com-brightgreen.svg?style=for-the-badge&logo=render)](https://expense-bot-1-jyl4.onrender.com)
 [![PWA Ready](https://img.shields.io/badge/PWA-Installable-blue.svg)](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps)
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Flask API](https://img.shields.io/badge/Flask-v3.0-green)](https://flask.palletsprojects.com/)
@@ -7,6 +8,8 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 **ExpenseTracker Pro** is a modern, installable Progressive Web Application (PWA) built for tracking personal spending, split expenses with friends, recurring monthly subscriptions (like YouTube Family Premium paid by Daksh on the 3rd of every month, Wi-Fi, Rent), 6-digit OTP verified authentication, and automated split reminders via WhatsApp or native share.
+
+🌐 **Live 24/7 Web App**: [https://expense-bot-1-jyl4.onrender.com](https://expense-bot-1-jyl4.onrender.com)
 
 ---
 
@@ -17,7 +20,7 @@
   - Native standalone app feel with offline asset caching (`sw.js` Service Worker).
 - 🔑 **6-Digit OTP Verified Authentication**:
   - Secure sign in and registration via 6-digit verification code.
-  - Real HTML Email OTP sending via SMTP (Gmail, SendGrid, Amazon SES) with automatic fallback to local Dev Mode.
+  - Real HTML Email OTP delivery via Brevo / Resend HTTPS API (Port 443) or Gmail SMTP, with fallback to local Dev Mode.
 - 🌅 **Time-Aware Personalized Greetings**:
   - Dynamic local-time greeting on your dashboard: *Good morning 🌅*, *Good afternoon ☀️*, *Good evening 🌇*, *Good night 🌙*.
 - 📅 **Recurring Monthly Bills & Subscription Manager**:
@@ -58,7 +61,7 @@ Expense-Tracker-App/
 ├── LICENSE                     # MIT Open Source License
 ├── .env.example                # Environment variables template
 ├── services/
-│   └── email_service.py        # Real SMTP HTML Email OTP Dispatcher
+│   └── email_service.py        # Real SMTP & HTTPS Email OTP Dispatcher (Brevo / Resend / Gmail)
 └── static/                     # PWA Frontend Assets
     ├── index.html              # Single Page App structure & meta tags
     ├── manifest.json           # Web App Manifest for app installation
@@ -108,10 +111,24 @@ Expense-Tracker-App/
    ```
 
 5. **Access the App**:
-   Open your browser and navigate to:
-   ```
-   http://localhost:5000
-   ```
+   Open your browser and navigate to: `http://localhost:5000`
+
+---
+
+## ☁️ 24/7 Live Deployment & Configuration
+
+### Live Demo URL
+Access the live deployed application 24/7 at:
+👉 **[https://expense-bot-1-jyl4.onrender.com](https://expense-bot-1-jyl4.onrender.com)**
+
+### Environment Variables for Real Email Delivery (Render Dashboard)
+
+| Variable | Description | Example |
+| --- | --- | --- |
+| `SMTP_PASS` | Brevo API Key (or Gmail App Password) | `xkeysib-...` |
+| `SMTP_USER` | Registered Brevo / Gmail Email | `your_email@gmail.com` |
+| `SMTP_HOST` | SMTP Host (default `smtp.gmail.com`) | `smtp.gmail.com` |
+| `SMTP_PORT` | Port (465 SSL or 587 TLS) | `465` |
 
 ---
 
@@ -127,25 +144,13 @@ Access the app in your browser at `http://localhost:5000`.
 
 ---
 
-## ☁️ 24/7 Cloud Deployment Guide
-
-### Deploy on Render.com (100% Free - No Credit Card Required)
-
-1. Sign up on [dashboard.render.com](https://dashboard.render.com/).
-2. Click **New +** ➔ Select **Web Service**.
-3. Connect your repository `Chitransh-18/Expense-Bot`.
-4. Select **Free ($0/mo)** instance type.
-5. Click **Create Web Service**! Render will deploy your live 24/7 HTTPS URL.
-
----
-
 ## 📱 How to Install on Your Device (PWA)
 
 ### Android / Chrome:
 - Click the **"📱 Install App"** button inside the top bar, or open browser menu (⋮) ➔ **"Add to Home screen"**.
 
 ### iPhone / iOS Safari:
-- Open your live site in Safari ➔ tap the **Share** button ➔ select **"Add to Home Screen"**.
+- Open `https://expense-bot-1-jyl4.onrender.com` in Safari ➔ tap the **Share** button ➔ select **"Add to Home Screen"**.
 
 ---
 
