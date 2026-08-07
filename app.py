@@ -63,7 +63,7 @@ def static_files(path):
         return jsonify({"error": "API route not found"}), 404
     return send_from_directory("static", path)
 
-# --- Diagnostic Route ---
+# --- Diagnostic Routes ---
 @app.route("/api/debug/smtp", methods=["GET"])
 def debug_smtp():
     host, port, user, password, sender = get_smtp_config()
@@ -76,6 +76,34 @@ def debug_smtp():
         "pass_set": bool(password),
         "pass_length": len(password)
     })
+
+@app.route("/api/test-smtp", methods=["GET"])
+def test_smtp():
+    host, port, user, password, sender = get_smtp_config()
+    if not (host and user and password):
+        return jsonify({"success": False, "error": "SMTP variables not fully set"})
+
+    try:
+        if port == 465:
+            server = smtplib.SMTP_SSL(host, port, timeout=10)
+        else:
+            server = smtplib.SMTP(host, port, timeout=10)
+            server.starttls()
+
+        server.login(user, password)
+        server.quit()
+        return jsonify({
+            "success": True,
+            "message": f"Successfully connected & authenticated with Gmail SMTP ({user})!"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error_type": type(e).__name__,
+            "error_detail": str(e),
+            "smtp_user": user,
+            "smtp_pass_length": len(password)
+        }), 400
 
 # --- OTP Verified Authentication API Routes ---
 
