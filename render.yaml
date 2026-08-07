@@ -2,6 +2,7 @@ services:
   - type: web
     name: expensetracker-pwa
     env: python
+    plan: free
     buildCommand: pip install -r requirements.txt && python database.py
     startCommand: gunicorn app:app
     envVars:
