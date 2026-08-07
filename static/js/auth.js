@@ -9,7 +9,7 @@ const Auth = {
     
     if (this.step === 'email') {
       mainContent.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: center; min-height: 82vh;">
+        <div class="auth-overlay">
           <div class="glass-card" style="width: 100%; max-width: 440px; padding: 2.8rem;">
             <div style="text-align: center; margin-bottom: 2.2rem;">
               <div class="brand-icon" style="width: 56px; height: 56px; margin: 0 auto 1.2rem auto; font-size: 1.8rem;">🔑</div>
@@ -39,7 +39,7 @@ const Auth = {
       `;
     } else {
       mainContent.innerHTML = `
-        <div style="display: flex; align-items: center; justify-content: center; min-height: 82vh;">
+        <div class="auth-overlay">
           <div class="glass-card" style="width: 100%; max-width: 460px; padding: 2.8rem;">
             <div style="text-align: center; margin-bottom: 1.8rem;">
               <div class="brand-icon" style="width: 56px; height: 56px; margin: 0 auto 1.2rem auto; font-size: 1.8rem; background: linear-gradient(135deg, var(--cyan), var(--primary));">📲</div>
@@ -78,7 +78,6 @@ const Auth = {
         </div>
       `;
 
-      // Auto-fill debug code if present for quick testing
       if (this.debugOTP) {
         setTimeout(() => {
           const boxes = document.querySelectorAll('.otp-box');
