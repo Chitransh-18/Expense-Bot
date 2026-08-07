@@ -4,15 +4,6 @@ from config import DATABASE_PATH
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-class DictRowWrapper:
-    def __init__(self, cursor, row):
-        for idx, col in enumerate(cursor.description):
-            setattr(self, col[0], row[idx])
-    def __getitem__(self, item):
-        return getattr(self, item)
-    def keys(self):
-        return [k for k in self.__dict__.keys()]
-
 def get_db():
     """Get database connection (PostgreSQL if DATABASE_URL set, otherwise SQLite)"""
     if DATABASE_URL:
@@ -31,7 +22,6 @@ def init_db():
     cursor = conn.cursor()
 
     is_postgres = bool(DATABASE_URL)
-
     auto_id_type = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
     timestamp_type = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
 
@@ -42,6 +32,17 @@ def init_db():
             email VARCHAR(255) UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             full_name VARCHAR(255) NOT NULL,
+            created_at {timestamp_type}
+        )
+    ''')
+
+    # OTP Codes Table
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS otp_codes (
+            id {auto_id_type},
+            email VARCHAR(255) NOT NULL,
+            code VARCHAR(10) NOT NULL,
+            expires_at {timestamp_type},
             created_at {timestamp_type}
         )
     ''')

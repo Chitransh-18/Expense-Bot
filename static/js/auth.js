@@ -1,90 +1,182 @@
 const Auth = {
+  currentEmail: '',
+  currentFullName: '',
+  step: 'email', // 'email' or 'otp'
+  debugOTP: '',
+
   renderAuthPage() {
     const mainContent = document.getElementById('view-container');
-    mainContent.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: center; min-height: 80vh;">
-        <div class="glass-card" style="width: 100%; max-width: 420px; padding: 2.5rem;">
-          <div style="text-align: center; margin-bottom: 2rem;">
-            <div class="brand-icon" style="width: 50px; height: 50px; margin: 0 auto 1rem auto; font-size: 1.8rem;">💰</div>
-            <h2 style="font-size: 1.7rem; font-weight: 700; margin-bottom: 0.5rem;" id="auth-title">Welcome Back</h2>
-            <p style="color: var(--text-muted); font-size: 0.95rem;" id="auth-subtitle">Sign in to manage your expenses & split bills</p>
-          </div>
-
-          <form id="auth-form" onsubmit="Auth.handleSubmit(event)">
-            <div class="form-group" id="group-fullname" style="display: none;">
-              <label class="form-label">Full Name</label>
-              <input type="text" class="form-input" id="auth-fullname" placeholder="e.g. Chitransh Saxena" />
-            </div>
-            
-            <div class="form-group">
-              <label class="form-label">Email Address</label>
-              <input type="email" class="form-input" id="auth-email" placeholder="name@example.com" required />
+    
+    if (this.step === 'email') {
+      mainContent.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 82vh;">
+          <div class="glass-card" style="width: 100%; max-width: 440px; padding: 2.8rem;">
+            <div style="text-align: center; margin-bottom: 2.2rem;">
+              <div class="brand-icon" style="width: 56px; height: 56px; margin: 0 auto 1.2rem auto; font-size: 1.8rem;">🔑</div>
+              <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: -0.02em;">OTP Verified Sign In</h2>
+              <p style="color: var(--text-muted); font-size: 0.95rem;">Enter your email to receive a 6-digit OTP code</p>
             </div>
 
-            <div class="form-group">
-              <label class="form-label">Password</label>
-              <input type="password" class="form-input" id="auth-password" placeholder="••••••••" required />
-            </div>
+            <form id="auth-email-form" onsubmit="Auth.handleSendOTP(event)">
+              <div class="form-group">
+                <label class="form-label">Full Name (Optional for new users)</label>
+                <input type="text" class="form-input" id="auth-fullname" placeholder="e.g. Chitransh Saxena" />
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <input type="email" class="form-input" id="auth-email" placeholder="name@example.com" value="${this.currentEmail}" required />
+              </div>
 
-            <div id="auth-error" style="color: var(--danger); font-size: 0.85rem; margin-bottom: 1rem; display: none;"></div>
+              <div id="auth-error" style="color: var(--danger); font-size: 0.85rem; margin-bottom: 1rem; display: none;"></div>
 
-            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="auth-submit-btn">
-              Sign In
-            </button>
-          </form>
-
-          <div style="text-align: center; margin-top: 1.5rem; font-size: 0.9rem; color: var(--text-muted);">
-            <span id="auth-toggle-text">Don't have an account?</span>
-            <a href="#" onclick="Auth.toggleMode(event)" id="auth-toggle-link" style="color: var(--primary); font-weight: 600; text-decoration: none; margin-left: 0.3rem;">Sign Up</a>
+              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="send-otp-btn">
+                <span>Request OTP Code</span> →
+              </button>
+            </form>
           </div>
         </div>
-      </div>
-    `;
+      `;
+    } else {
+      mainContent.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: center; min-height: 82vh;">
+          <div class="glass-card" style="width: 100%; max-width: 460px; padding: 2.8rem;">
+            <div style="text-align: center; margin-bottom: 1.8rem;">
+              <div class="brand-icon" style="width: 56px; height: 56px; margin: 0 auto 1.2rem auto; font-size: 1.8rem; background: linear-gradient(135deg, var(--cyan), var(--primary));">📲</div>
+              <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem;">Enter Verification Code</h2>
+              <p style="color: var(--text-muted); font-size: 0.95rem;">We sent a 6-digit OTP to <strong style="color: var(--cyan);">${this.currentEmail}</strong></p>
+            </div>
+
+            ${this.debugOTP ? `
+              <div style="background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.35); border-radius: var(--radius-md); padding: 0.8rem; text-align: center; margin-bottom: 1.5rem;">
+                <span style="font-size: 0.85rem; color: var(--cyan);">Local Testing OTP Code: <strong style="font-size: 1.1rem; letter-spacing: 2px;">${this.debugOTP}</strong></span>
+              </div>
+            ` : ''}
+
+            <form id="auth-otp-form" onsubmit="Auth.handleVerifyOTP(event)">
+              <div class="otp-container" id="otp-inputs">
+                <input type="text" maxlength="1" class="otp-box" autofocus oninput="Auth.handleDigitInput(this, 0)" onkeydown="Auth.handleKeyDown(event, 0)" />
+                <input type="text" maxlength="1" class="otp-box" oninput="Auth.handleDigitInput(this, 1)" onkeydown="Auth.handleKeyDown(event, 1)" />
+                <input type="text" maxlength="1" class="otp-box" oninput="Auth.handleDigitInput(this, 2)" onkeydown="Auth.handleKeyDown(event, 2)" />
+                <input type="text" maxlength="1" class="otp-box" oninput="Auth.handleDigitInput(this, 3)" onkeydown="Auth.handleKeyDown(event, 3)" />
+                <input type="text" maxlength="1" class="otp-box" oninput="Auth.handleDigitInput(this, 4)" onkeydown="Auth.handleKeyDown(event, 4)" />
+                <input type="text" maxlength="1" class="otp-box" oninput="Auth.handleDigitInput(this, 5)" onkeydown="Auth.handleKeyDown(event, 5)" />
+              </div>
+
+              <div id="auth-error" style="color: var(--danger); font-size: 0.85rem; margin-bottom: 1rem; text-align: center; display: none;"></div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="verify-otp-btn">
+                ✅ Verify & Sign In
+              </button>
+            </form>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.8rem; font-size: 0.88rem;">
+              <a href="#" onclick="Auth.changeEmail(event)" style="color: var(--text-muted); text-decoration: none;">← Change Email</a>
+              <a href="#" onclick="Auth.resendOTP(event)" style="color: var(--primary); font-weight: 600; text-decoration: none;">Resend OTP</a>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Auto-fill debug code if present for quick testing
+      if (this.debugOTP) {
+        setTimeout(() => {
+          const boxes = document.querySelectorAll('.otp-box');
+          for (let i = 0; i < 6 && i < this.debugOTP.length; i++) {
+            if (boxes[i]) boxes[i].value = this.debugOTP[i];
+          }
+        }, 100);
+      }
+    }
   },
 
-  isRegistering: false,
-
-  toggleMode(e) {
-    if (e) e.preventDefault();
-    this.isRegistering = !this.isRegistering;
-    
-    document.getElementById('auth-title').innerText = this.isRegistering ? 'Create Account' : 'Welcome Back';
-    document.getElementById('auth-subtitle').innerText = this.isRegistering ? 'Sign up to start tracking expenses' : 'Sign in to manage your expenses & split bills';
-    document.getElementById('group-fullname').style.display = this.isRegistering ? 'block' : 'none';
-    document.getElementById('auth-submit-btn').innerText = this.isRegistering ? 'Sign Up' : 'Sign In';
-    document.getElementById('auth-toggle-text').innerText = this.isRegistering ? 'Already have an account?' : "Don't have an account?";
-    document.getElementById('auth-toggle-link').innerText = this.isRegistering ? 'Sign In' : 'Sign Up';
-    document.getElementById('auth-error').style.display = 'none';
-  },
-
-  async handleSubmit(e) {
+  async handleSendOTP(e) {
     e.preventDefault();
     const errorDiv = document.getElementById('auth-error');
     errorDiv.style.display = 'none';
 
-    const email = document.getElementById('auth-email').value;
-    const password = document.getElementById('auth-password').value;
-    const fullName = document.getElementById('auth-fullname').value;
+    this.currentEmail = document.getElementById('auth-email').value.trim();
+    this.currentFullName = document.getElementById('auth-fullname').value.trim();
 
-    const endpoint = this.isRegistering ? '/api/auth/register' : '/api/auth/login';
-    const payload = this.isRegistering 
-      ? { email, password, full_name: fullName }
-      : { email, password };
+    if (!this.currentEmail) return;
 
     try {
-      const res = await API.request(endpoint, {
+      const res = await API.request('/api/auth/send-otp', {
         method: 'POST',
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ email: this.currentEmail, full_name: this.currentFullName })
+      });
+
+      this.debugOTP = res.otp_debug || '';
+      this.step = 'otp';
+      this.renderAuthPage();
+    } catch (err) {
+      errorDiv.innerText = err.message || 'Failed to send OTP code';
+      errorDiv.style.display = 'block';
+    }
+  },
+
+  async handleVerifyOTP(e) {
+    e.preventDefault();
+    const errorDiv = document.getElementById('auth-error');
+    errorDiv.style.display = 'none';
+
+    const boxes = document.querySelectorAll('.otp-box');
+    let otpCode = '';
+    boxes.forEach(b => otpCode += b.value.trim());
+
+    if (otpCode.length < 6) {
+      errorDiv.innerText = 'Please enter all 6 digits of the OTP code';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    try {
+      const res = await API.request('/api/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: this.currentEmail,
+          otp_code: otpCode,
+          full_name: this.currentFullName
+        })
       });
 
       if (res.token) {
         API.setToken(res.token);
         API.setUser(res.user);
+        this.step = 'email';
         App.onAuthSuccess();
       }
     } catch (err) {
-      errorDiv.innerText = err.message || 'Authentication failed';
+      errorDiv.innerText = err.message || 'Verification failed. Check OTP code.';
       errorDiv.style.display = 'block';
     }
+  },
+
+  handleDigitInput(input, index) {
+    if (input.value.length === 1 && index < 5) {
+      const nextInput = document.querySelectorAll('.otp-box')[index + 1];
+      if (nextInput) nextInput.focus();
+    }
+  },
+
+  handleKeyDown(e, index) {
+    if (e.key === 'Backspace' && !e.target.value && index > 0) {
+      const prevInput = document.querySelectorAll('.otp-box')[index - 1];
+      if (prevInput) {
+        prevInput.focus();
+        prevInput.value = '';
+      }
+    }
+  },
+
+  changeEmail(e) {
+    e.preventDefault();
+    this.step = 'email';
+    this.renderAuthPage();
+  },
+
+  resendOTP(e) {
+    e.preventDefault();
+    this.handleSendOTP(e);
   }
 };
