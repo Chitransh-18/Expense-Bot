@@ -92,17 +92,20 @@ def send_otp():
     conn.close()
 
     # Dispatch Email OTP
-    sent_via_email = send_otp_email(email, otp_code)
+    sent_via_email, error_msg = send_otp_email(email, otp_code)
 
     res_data = {
-        "message": f"OTP Verification Code sent to {email}",
+        "message": f"OTP Verification Code generated for {email}",
         "email": email,
         "email_sent": sent_via_email
     }
 
-    # If SMTP is not configured yet, supply debug code & notice so testing is seamless
-    if not is_smtp_configured():
-        res_data["dev_notice"] = f"SMTP Email not configured yet. Demo OTP Code: {otp_code}"
+    # If email delivery failed or SMTP is unconfigured, provide fallback notice and debug OTP
+    if not sent_via_email:
+        if is_smtp_configured():
+            res_data["dev_notice"] = f"SMTP Delivery Notice: {error_msg}. Demo Code: {otp_code}"
+        else:
+            res_data["dev_notice"] = f"SMTP Email not configured yet. Demo Code: {otp_code}"
         res_data["otp_debug"] = otp_code
 
     return jsonify(res_data)

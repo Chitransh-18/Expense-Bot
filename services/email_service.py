@@ -4,29 +4,29 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # Load SMTP Credentials from Environment
-SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASS = os.environ.get("SMTP_PASS", "")
+SMTP_PASS = os.environ.get("SMTP_PASS", "").replace(" ", "") # Remove spaces from app password if present
 SMTP_FROM = os.environ.get("SMTP_FROM", "ExpenseTracker Pro <noreply@expensetracker.app>")
 
 def is_smtp_configured() -> bool:
     """Check if SMTP credentials are configured"""
     return bool(SMTP_HOST and SMTP_USER and SMTP_PASS)
 
-def send_otp_email(recipient_email: str, otp_code: str) -> bool:
+def send_otp_email(recipient_email: str, otp_code: str):
     """
-    Send formatted HTML OTP Verification Email via SMTP
-    Returns True if sent successfully, or False if falling back to dev mode
+    Send formatted HTML OTP Verification Email via SMTP with timeout handling.
+    Returns (success: bool, error_message: str) tuple.
     """
     if not is_smtp_configured():
         print(f"\n[DEV MODE] SMTP not configured. OTP for {recipient_email}: {otp_code}\n")
-        return False
+        return False, "SMTP credentials not configured"
 
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = f"🔑 {otp_code} is your ExpenseTracker Pro Verification Code"
-        msg["From"] = SMTP_FROM
+        msg["From"] = SMTP_FROM or SMTP_USER
         msg["To"] = recipient_email
 
         html_body = f"""
@@ -60,14 +60,22 @@ def send_otp_email(recipient_email: str, otp_code: str) -> bool:
 
         msg.attach(MIMEText(html_body, "html"))
 
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASS)
-        server.sendmail(SMTP_FROM, [recipient_email], msg.as_string())
+        clean_user = SMTP_USER.strip()
+        clean_pass = SMTP_PASS.strip().replace(" ", "")
+
+        if SMTP_PORT == 465:
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10)
+        else:
+            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
+            server.starttls()
+
+        server.login(clean_user, clean_pass)
+        server.sendmail(SMTP_FROM or clean_user, [recipient_email], msg.as_string())
         server.quit()
 
         print(f"✅ OTP email sent successfully to {recipient_email}")
-        return True
+        return True, ""
     except Exception as e:
-        print(f"❌ Error sending OTP email to {recipient_email}: {e}")
-        return False
+        err_msg = str(e)
+        print(f"❌ SMTP Error sending email to {recipient_email}: {err_msg}")
+        return False, err_msg
