@@ -58,6 +58,8 @@ def index():
 
 @app.route("/<path:path>")
 def static_files(path):
+    if path.startswith("api/"):
+        return jsonify({"error": "API route not found"}), 404
     return send_from_directory("static", path)
 
 # --- OTP Verified Authentication API Routes ---
