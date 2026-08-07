@@ -1,14 +1,15 @@
 import os
 import socket
 import smtplib
+import json
+import urllib.request
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# Force socket to resolve IPv4 addresses first (prevents Errno 101 Network is Unreachable on cloud IPv6 containers)
+# Force socket to resolve IPv4 addresses first
 orig_getaddrinfo = socket.getaddrinfo
 def getaddrinfo_ipv4_only(host, port, family=0, type=0, proto=0, flags=0):
     try:
-        # Request IPv4 AF_INET specifically
         res = orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
         if res:
             return res
@@ -19,7 +20,7 @@ def getaddrinfo_ipv4_only(host, port, family=0, type=0, proto=0, flags=0):
 socket.getaddrinfo = getaddrinfo_ipv4_only
 
 def get_smtp_config():
-    """Dynamically fetch current SMTP credentials from environment with robust string sanitization"""
+    """Dynamically fetch current SMTP / API credentials from environment"""
     host = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip().strip("'\"")
     port_str = os.environ.get("SMTP_PORT", "587").strip().strip("'\"")
     try:
@@ -30,24 +31,108 @@ def get_smtp_config():
     user = os.environ.get("SMTP_USER", "").strip().strip("'\"")
     password = os.environ.get("SMTP_PASS", "").strip().strip("'\"").replace(" ", "")
     sender = os.environ.get("SMTP_FROM", f"ExpenseTracker Pro <{user}>" if user else "ExpenseTracker Pro <noreply@expensetracker.app>").strip().strip("'\"")
-    return host, port, user, password, sender
+    
+    brevo_key = os.environ.get("BREVO_API_KEY", "").strip().strip("'\"")
+    resend_key = os.environ.get("RESEND_API_KEY", "").strip().strip("'\"")
+    
+    # Auto-detect if user put Resend or Brevo key in SMTP_PASS
+    if password.startswith("re_"):
+        resend_key = password
+    elif password.startswith("xkeysib-"):
+        brevo_key = password
+
+    return host, port, user, password, sender, brevo_key, resend_key
 
 def is_smtp_configured() -> bool:
-    """Check if SMTP credentials are configured"""
-    host, port, user, password, sender = get_smtp_config()
-    return bool(host and user and password)
+    """Check if SMTP credentials or Email API keys are configured"""
+    host, port, user, password, sender, brevo_key, resend_key = get_smtp_config()
+    return bool((host and user and password) or brevo_key or resend_key)
+
+def send_via_brevo(api_key: str, sender_email: str, recipient_email: str, otp_code: str):
+    """Send HTML OTP email via Brevo HTTPS API (Port 443 - Unblocked on Render)"""
+    try:
+        url = "https://api.brevo.com/v3/smtp/email"
+        payload = {
+            "sender": {"name": "ExpenseTracker Pro", "email": sender_email or "noreply@expensetracker.app"},
+            "to": [{"email": recipient_email}],
+            "subject": f"🔑 {otp_code} is your ExpenseTracker Pro Verification Code",
+            "htmlContent": f"""
+            <div style="font-family: sans-serif; background: #0f172a; color: #fff; padding: 30px; border-radius: 16px; text-align: center; max-width: 480px; margin: 0 auto;">
+              <h2 style="color: #6366f1;">ExpenseTracker Pro</h2>
+              <h3>Verification Code</h3>
+              <div style="background: rgba(99,102,241,0.2); border: 1px dashed #6366f1; padding: 16px; font-size: 32px; font-weight: bold; color: #06b6d4; letter-spacing: 6px; margin: 20px 0;">{otp_code}</div>
+              <p style="color: #94a3b8; font-size: 13px;">This code will expire in 10 minutes.</p>
+            </div>
+            """
+        }
+        headers = {
+            "accept": "application/json",
+            "api-key": api_key,
+            "content-type": "application/json"
+        }
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status in (200, 201):
+                print(f"✅ OTP email sent via Brevo HTTPS API to {recipient_email}")
+                return True, ""
+    except Exception as e:
+        print(f"⚠️ Brevo HTTPS API failed: {e}")
+        return False, f"Brevo API error: {e}"
+    return False, "Brevo API unknown error"
+
+def send_via_resend(api_key: str, sender_email: str, recipient_email: str, otp_code: str):
+    """Send HTML OTP email via Resend HTTPS API (Port 443 - Unblocked on Render)"""
+    try:
+        url = "https://api.resend.com/emails"
+        payload = {
+            "from": sender_email or "onboarding@resend.dev",
+            "to": [recipient_email],
+            "subject": f"🔑 {otp_code} is your ExpenseTracker Pro Verification Code",
+            "html": f"""
+            <div style="font-family: sans-serif; background: #0f172a; color: #fff; padding: 30px; border-radius: 16px; text-align: center; max-width: 480px; margin: 0 auto;">
+              <h2 style="color: #6366f1;">ExpenseTracker Pro</h2>
+              <h3>Verification Code</h3>
+              <div style="background: rgba(99,102,241,0.2); border: 1px dashed #6366f1; padding: 16px; font-size: 32px; font-weight: bold; color: #06b6d4; letter-spacing: 6px; margin: 20px 0;">{otp_code}</div>
+              <p style="color: #94a3b8; font-size: 13px;">This code will expire in 10 minutes.</p>
+            </div>
+            """
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status in (200, 201):
+                print(f"✅ OTP email sent via Resend HTTPS API to {recipient_email}")
+                return True, ""
+    except Exception as e:
+        print(f"⚠️ Resend HTTPS API failed: {e}")
+        return False, f"Resend API error: {e}"
+    return False, "Resend API unknown error"
 
 def send_otp_email(recipient_email: str, otp_code: str):
     """
-    Send formatted HTML OTP Verification Email via SMTP with automatic Port 587/465 fallback.
+    Send formatted HTML OTP Verification Email via HTTPS API or SMTP fallback.
     Returns (success: bool, error_message: str) tuple.
     """
-    host, port, user, password, sender = get_smtp_config()
+    host, port, user, password, sender, brevo_key, resend_key = get_smtp_config()
 
-    if not (host and user and password):
-        print(f"\n[DEV MODE] SMTP not configured. OTP for {recipient_email}: {otp_code}\n")
-        return False, "SMTP credentials not configured"
+    if not is_smtp_configured():
+        print(f"\n[DEV MODE] Email unconfigured. OTP for {recipient_email}: {otp_code}\n")
+        return False, "Email service not configured"
 
+    # Try Brevo HTTPS API if key present
+    if brevo_key:
+        ok, err = send_via_brevo(brevo_key, sender or user, recipient_email, otp_code)
+        if ok: return True, ""
+
+    # Try Resend HTTPS API if key present
+    if resend_key:
+        ok, err = send_via_resend(resend_key, sender or user, recipient_email, otp_code)
+        if ok: return True, ""
+
+    # Try SMTP Protocol
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"🔑 {otp_code} is your ExpenseTracker Pro Verification Code"
     msg["From"] = sender
@@ -84,7 +169,6 @@ def send_otp_email(recipient_email: str, otp_code: str):
 
     msg.attach(MIMEText(html_body, "html"))
 
-    # Try Primary Connection Method
     last_error = ""
     ports_to_try = [port, 465, 587] if port not in (465, 587) else [port, 465 if port == 587 else 587]
 
@@ -92,9 +176,9 @@ def send_otp_email(recipient_email: str, otp_code: str):
         try:
             print(f"Attempting SMTP connection to {host}:{p} (IPv4)...")
             if p == 465:
-                server = smtplib.SMTP_SSL(host, p, timeout=10)
+                server = smtplib.SMTP_SSL(host, p, timeout=8)
             else:
-                server = smtplib.SMTP(host, p, timeout=10)
+                server = smtplib.SMTP(host, p, timeout=8)
                 server.starttls()
 
             server.login(user, password)
