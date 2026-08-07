@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # Database Service (PostgreSQL)
+  db:
+    image: postgres:15-alpine
+    container_name: expensetracker_db
+    restart: always
+    environment:
+      POSTGRES_DB: expensetracker
+      POSTGRES_USER: expenseuser
+      POSTGRES_PASSWORD: expensesecretpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U expenseuser -d expensetracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Web Application Service (Flask + PWA)
+  web:
+    build: .
+    container_name: expensetracker_web
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://expenseuser:expensesecretpassword@db:5432/expensetracker
+      - SECRET_KEY=super_secret_jwt_key_2026
+      - PORT=5000
+      - FLASK_ENV=production
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

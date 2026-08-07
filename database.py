@@ -1,60 +1,82 @@
-import sqlite3
 import os
+import sqlite3
 from config import DATABASE_PATH
 
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+class DictRowWrapper:
+    def __init__(self, cursor, row):
+        for idx, col in enumerate(cursor.description):
+            setattr(self, col[0], row[idx])
+    def __getitem__(self, item):
+        return getattr(self, item)
+    def keys(self):
+        return [k for k in self.__dict__.keys()]
+
 def get_db():
-    """Get a database connection with dictionary row factory"""
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """Get database connection (PostgreSQL if DATABASE_URL set, otherwise SQLite)"""
+    if DATABASE_URL:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        return conn
+    else:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        return conn
 
 def init_db():
-    """Initialize database tables"""
+    """Initialize database tables for PostgreSQL or SQLite"""
     conn = get_db()
     cursor = conn.cursor()
 
+    is_postgres = bool(DATABASE_URL)
+
+    auto_id_type = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    timestamp_type = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+
     # Users Table
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
+            id {auto_id_type},
+            email VARCHAR(255) UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            full_name TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            full_name VARCHAR(255) NOT NULL,
+            created_at {timestamp_type}
         )
     ''')
 
     # Expenses Table
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS expenses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {auto_id_type},
             user_id INTEGER NOT NULL,
-            expense_type TEXT NOT NULL,
-            category TEXT NOT NULL,
+            expense_type VARCHAR(50) NOT NULL,
+            category VARCHAR(100) NOT NULL,
             amount REAL NOT NULL,
-            payment_mode TEXT NOT NULL,
+            payment_mode VARCHAR(50) NOT NULL,
             description TEXT,
-            date TEXT NOT NULL,
+            date VARCHAR(20) NOT NULL,
             split_with TEXT,
-            split_type TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            split_type VARCHAR(50),
+            created_at {timestamp_type},
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
 
     # Recurring Monthly Bills Table
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS recurring_bills (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {auto_id_type},
             user_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
+            title VARCHAR(255) NOT NULL,
             total_amount REAL NOT NULL,
             user_share REAL NOT NULL,
-            paid_by TEXT NOT NULL,
+            paid_by VARCHAR(100) NOT NULL,
             due_day INTEGER NOT NULL,
-            category TEXT NOT NULL,
-            last_settled_month TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            category VARCHAR(100) NOT NULL,
+            last_settled_month VARCHAR(20),
+            created_at {timestamp_type},
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
@@ -64,4 +86,4 @@ def init_db():
 
 if __name__ == "__main__":
     init_db()
-    print("Database initialized successfully.")
+    print(f"Database initialized successfully ({'PostgreSQL' if DATABASE_URL else 'SQLite'}).")
