@@ -100,9 +100,10 @@ def send_otp():
         "email_sent": sent_via_email
     }
 
-    # Only supply debug code if SMTP is unconfigured for local dev
+    # If SMTP is not configured yet, supply debug code & notice so testing is seamless
     if not is_smtp_configured():
-        res_data["dev_notice"] = "SMTP not configured. OTP printed to server console."
+        res_data["dev_notice"] = f"SMTP Email not configured yet. Demo OTP Code: {otp_code}"
+        res_data["otp_debug"] = otp_code
 
     return jsonify(res_data)
 
