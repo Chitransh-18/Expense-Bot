@@ -56,6 +56,7 @@ def init_db():
         execute_sql(cursor, conn, f'''
             CREATE TABLE IF NOT EXISTS users (
                 id {auto_id_type},
+                username VARCHAR(255) UNIQUE,
                 email VARCHAR(255) UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 full_name VARCHAR(255) NOT NULL,
@@ -131,6 +132,12 @@ def init_db():
         conn.rollback()
 
     # Auto-migrations for existing databases (isolated rollbacks on duplicate column)
+    try:
+        execute_sql(cursor, conn, "ALTER TABLE users ADD COLUMN username VARCHAR(255)")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
     try:
         execute_sql(cursor, conn, "ALTER TABLE users ADD COLUMN is_password_set INTEGER DEFAULT 0")
         conn.commit()

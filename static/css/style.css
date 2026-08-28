@@ -126,6 +126,39 @@ body::after {
   background: #ffffff;
 }
 
+/* Auth Tab Toggle Header */
+.auth-tabs-header {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: var(--radius-md);
+  padding: 0.35rem;
+  margin-bottom: 1.8rem;
+  border: 1px solid #cbd5e1;
+}
+
+.auth-tab-btn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.auth-tab-btn.active {
+  background: #ffffff;
+  color: #ff6b6b;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
 @media (max-width: 840px) {
   .auth-split-wrapper {
     grid-template-columns: 1fr;

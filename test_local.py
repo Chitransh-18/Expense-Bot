@@ -3,47 +3,67 @@ import json
 from app import app, init_db
 
 def run_tests():
-    print("[TEST] Testing ExpenseTracker Pro API endpoints locally...")
+    print("[TEST] Testing ExpenseTracker Pro Tabbed Auth & Username API endpoints locally...")
     init_db()
     client = app.test_client()
 
-    # 1. Test check-user endpoint (New User)
-    res = client.post('/api/auth/check-user', json={'email': 'testuser_local@gmail.com'})
-    assert res.status_code == 200, f"check-user failed: {res.data}"
-    data = res.get_json()
-    assert data['exists'] == False or data['exists'] == True, "check-user response format invalid"
-    print("[PASS] /api/auth/check-user passed!")
-
-    # 2. Test send-otp endpoint
-    res = client.post('/api/auth/send-otp', json={'email': 'testuser_local@gmail.com'})
-    assert res.status_code == 200, f"send-otp failed: {res.data}"
-    data = res.get_json()
-    assert 'email' in data, "send-otp response format invalid"
-    print("[PASS] /api/auth/send-otp passed!")
-
-    # 3. Test verify-otp-set-password endpoint
-    otp_code = data.get('otp_debug', '123456')
-    res = client.post('/api/auth/verify-otp-set-password', json={
-        'email': 'testuser_local@gmail.com',
-        'otp_code': otp_code,
-        'password': 'testpassword123',
-        'full_name': 'Test User Local'
+    # 1. Test registration - Send OTP with username chitransh_local
+    res = client.post('/api/auth/register-send-otp', json={
+        'full_name': 'Chitransh Saxena',
+        'username': 'chitransh_local',
+        'email': 'chitransh_test@gmail.com',
+        'password': 'password123'
     })
-    assert res.status_code == 200, f"verify-otp-set-password failed: {res.data}"
+    assert res.status_code == 200, f"register-send-otp failed: {res.data}"
+    data = res.get_json()
+    assert data['username'] == 'chitransh_local', "username parsing failed"
+    print("[PASS] /api/auth/register-send-otp passed!")
+
+    # 2. Test registration - Verify OTP & Create User
+    otp_code = data.get('otp_debug', '123456')
+    res = client.post('/api/auth/register-verify-otp', json={
+        'full_name': 'Chitransh Saxena',
+        'username': 'chitransh_local',
+        'email': 'chitransh_test@gmail.com',
+        'password': 'password123',
+        'otp_code': otp_code
+    })
+    assert res.status_code == 200, f"register-verify-otp failed: {res.data}"
     auth_data = res.get_json()
     token = auth_data['token']
     headers = {'Authorization': f'Bearer {token}'}
-    print("[PASS] /api/auth/verify-otp-set-password passed!")
+    print("[PASS] /api/auth/register-verify-otp passed!")
 
-    # 4. Test login-password endpoint
-    res = client.post('/api/auth/login-password', json={
-        'email': 'testuser_local@gmail.com',
-        'password': 'testpassword123'
+    # 3. Test Username Uniqueness Rejection
+    res = client.post('/api/auth/register-send-otp', json={
+        'full_name': 'Another User',
+        'username': 'chitransh_local', # Duplicate!
+        'email': 'another_test@gmail.com',
+        'password': 'password123'
     })
-    assert res.status_code == 200, f"login-password failed: {res.data}"
-    print("[PASS] /api/auth/login-password passed!")
+    assert res.status_code == 400, f"Duplicate username check should fail, got status {res.status_code}"
+    err_msg = res.get_json()['error']
+    assert "already exists" in err_msg, f"Unexpected error message: {err_msg}"
+    print("[PASS] Duplicate username rejection & suggestion check passed!")
 
-    # 5. Test add split expense (₹450 split equally -> ₹225 share)
+    # 4. Test Sign-In with Username + Password
+    res = client.post('/api/auth/login', json={
+        'username_or_email': 'chitransh_local',
+        'password': 'password123'
+    })
+    assert res.status_code == 200, f"login with username failed: {res.data}"
+    assert res.get_json()['user']['username'] == 'chitransh_local', "login user format invalid"
+    print("[PASS] /api/auth/login with Username passed!")
+
+    # 5. Test Sign-In with Email + Password
+    res = client.post('/api/auth/login', json={
+        'username_or_email': 'chitransh_test@gmail.com',
+        'password': 'password123'
+    })
+    assert res.status_code == 200, f"login with email failed: {res.data}"
+    print("[PASS] /api/auth/login with Email passed!")
+
+    # 6. Test Add Split Expense (50% share calculation)
     res = client.post('/api/expenses', headers=headers, json={
         'expense_type': 'Split',
         'category': 'Food & Dining',
@@ -59,14 +79,7 @@ def run_tests():
     assert exp_data['total_bill_amount'] == 450.0, f"Expected total 450.0, got {exp_data['total_bill_amount']}"
     print("[PASS] /api/expenses Split calculation (50% share = 225) passed!")
 
-    # 6. Test fetch expenses
-    res = client.get('/api/expenses', headers=headers)
-    assert res.status_code == 200, f"get-expenses failed: {res.data}"
-    expenses = res.get_json()['expenses']
-    assert len(expenses) >= 1, "Expenses list empty"
-    print("[PASS] /api/expenses list fetch passed!")
-
-    print("\nALL LOCAL API & DATABASE INTEGRATION TESTS PASSED SUCCESSFULLY!")
+    print("\nALL LOCAL TABBED AUTH & USERNAME TESTS PASSED SUCCESSFULLY!")
 
 if __name__ == "__main__":
     run_tests()

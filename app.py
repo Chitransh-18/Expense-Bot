@@ -3,6 +3,7 @@ import io
 import csv
 import jwt
 import random
+import re
 import sqlite3
 import smtplib
 from datetime import datetime, timedelta
@@ -25,7 +26,6 @@ init_db()
 @app.errorhandler(Exception)
 def handle_exception(e):
     print(f"❌ Global API Exception: {e}")
-    # Auto-repair tables if missing table relation error occurs
     if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
         try:
             init_db()
@@ -53,7 +53,7 @@ def token_required(f):
             conn = get_db()
             cursor = conn.cursor()
             try:
-                execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE id = ?", (data["user_id"],))
+                execute_sql(cursor, conn, "SELECT id, username, email, full_name, is_password_set FROM users WHERE id = ?", (data["user_id"],))
                 user_row = cursor.fetchone()
             except Exception as e:
                 if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
@@ -61,7 +61,7 @@ def token_required(f):
                     init_db()
                     conn = get_db()
                     cursor = conn.cursor()
-                    execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE id = ?", (data["user_id"],))
+                    execute_sql(cursor, conn, "SELECT id, username, email, full_name, is_password_set FROM users WHERE id = ?", (data["user_id"],))
                     user_row = cursor.fetchone()
                 else:
                     raise e
@@ -88,122 +88,56 @@ def static_files(path):
         return jsonify({"error": "API route not found"}), 404
     return send_from_directory("static", path)
 
-# --- Diagnostic Routes ---
-@app.route("/api/debug/smtp", methods=["GET"])
-def debug_smtp():
-    host, port, user, password, sender, brevo_key, resend_key = get_smtp_config()
-    return jsonify({
-        "configured": is_smtp_configured(),
-        "host": host,
-        "port": port,
-        "user_set": bool(user),
-        "user_masked": f"{user[:3]}***@{user.split('@')[-1]}" if "@" in user else bool(user),
-        "pass_set": bool(password),
-        "brevo_key_set": bool(brevo_key),
-        "resend_key_set": bool(resend_key)
-    })
+# --- Authentication API Routes ---
 
-@app.route("/api/test-smtp", methods=["GET"])
-def test_smtp():
-    host, port, user, password, sender, brevo_key, resend_key = get_smtp_config()
-    if not is_smtp_configured():
-        return jsonify({"success": False, "error": "Email service variables not fully set"})
-
-    target = user if (user and "@" in user) else "test@example.com"
-    success, err_msg = send_otp_email(target, "999999")
-    if success:
-        return jsonify({
-            "success": True,
-            "message": f"Successfully connected & sent test OTP email to {target}!"
-        })
-    else:
-        return jsonify({
-            "success": False,
-            "error_type": "EmailError",
-            "error_detail": err_msg,
-            "user": user,
-            "brevo_key_set": bool(brevo_key)
-        }), 400
-
-# --- Authentication & Password API Routes ---
-
-@app.route("/api/auth/check-user", methods=["POST"])
-def check_user():
+@app.route("/api/auth/check-username", methods=["POST"])
+def check_username():
     data = request.get_json() or {}
-    email = data.get("email", "").strip().lower()
+    raw_username = data.get("username", "").strip()
+    username = re.sub(r'[^a-zA-Z0-9_]', '', raw_username).lower()
 
-    if not email:
-        return jsonify({"error": "Email address is required"}), 400
+    if not username:
+        return jsonify({"available": False, "error": "Username must contain letters, numbers, or '_'"}), 400
 
     conn = get_db()
     cursor = conn.cursor()
-    
-    try:
-        execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE email = ?", (email,))
-        user_row = cursor.fetchone()
-    except Exception as e:
-        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
-            conn.close()
-            init_db()
-            conn = get_db()
-            cursor = conn.cursor()
-            execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE email = ?", (email,))
-            user_row = cursor.fetchone()
-        else:
-            raise e
-
+    execute_sql(cursor, conn, "SELECT id FROM users WHERE LOWER(username) = ?", (username,))
+    row = cursor.fetchone()
     conn.close()
 
-    user = to_dict(user_row)
-
-    if user:
+    if row:
+        suggestion1 = f"{username}_1"
+        suggestion2 = f"{username}_18"
         return jsonify({
-            "exists": True,
-            "has_password": bool(user.get("is_password_set", 0)),
-            "full_name": user.get("full_name", "")
-        })
-    else:
-        return jsonify({
-            "exists": False,
-            "has_password": False,
-            "full_name": ""
+            "available": False,
+            "username": username,
+            "message": f"Username '{raw_username}' is already taken. Try adding '_' or a number.",
+            "suggestions": [suggestion1, suggestion2]
         })
 
-@app.route("/api/auth/login-password", methods=["POST"])
-def login_password():
+    return jsonify({"available": True, "username": username})
+
+@app.route("/api/auth/login", methods=["POST"])
+def login():
     data = request.get_json() or {}
-    email = data.get("email", "").strip().lower()
+    identifier = data.get("username_or_email", "").strip().lower()
     password = data.get("password", "").strip()
 
-    if not email or not password:
-        return jsonify({"error": "Email and password are required"}), 400
+    if not identifier or not password:
+        return jsonify({"error": "Username/Email and Password are required"}), 400
 
     conn = get_db()
     cursor = conn.cursor()
-
-    try:
-        execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
-        user_row = cursor.fetchone()
-    except Exception as e:
-        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
-            conn.close()
-            init_db()
-            conn = get_db()
-            cursor = conn.cursor()
-            execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
-            user_row = cursor.fetchone()
-        else:
-            raise e
-
+    execute_sql(cursor, conn, "SELECT * FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?", (identifier, identifier))
+    user_row = cursor.fetchone()
     conn.close()
 
     user = to_dict(user_row)
     if not user:
-        return jsonify({"error": "User not found with this email"}), 400
+        return jsonify({"error": "No account found with this username or email"}), 400
 
-    # Check password match
     if not check_password_hash(user["password_hash"], password):
-        return jsonify({"error": "Incorrect password. Try again or sign in via OTP."}), 400
+        return jsonify({"error": "Incorrect password. Please try again."}), 400
 
     # Generate JWT Token
     token = jwt.encode(
@@ -217,99 +151,102 @@ def login_password():
         "token": token,
         "user": {
             "id": user["id"],
+            "username": user.get("username") or user["email"].split("@")[0],
             "email": user["email"],
             "full_name": user["full_name"]
         }
     })
 
-@app.route("/api/auth/send-otp", methods=["POST"])
-def send_otp():
+@app.route("/api/auth/register-send-otp", methods=["POST"])
+def register_send_otp():
     data = request.get_json() or {}
+    full_name = data.get("full_name", "").strip()
+    raw_username = data.get("username", "").strip()
     email = data.get("email", "").strip().lower()
+    password = data.get("password", "").strip()
 
-    if not email:
-        return jsonify({"error": "Email address is required"}), 400
+    if not full_name or not email or not password or not raw_username:
+        return jsonify({"error": "All fields (Full Name, Username, Email, Password) are required"}), 400
+
+    if len(password) < 4:
+        return jsonify({"error": "Password must be at least 4 characters long"}), 400
+
+    username = re.sub(r'[^a-zA-Z0-9_]', '', raw_username).lower()
+    if not username:
+        return jsonify({"error": "Username can only contain letters, numbers, and '_'"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # 1. Check Username Uniqueness
+    execute_sql(cursor, conn, "SELECT id FROM users WHERE LOWER(username) = ?", (username,))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({
+            "error": f"Username '{raw_username}' already exists! Try adding '_' or a number (e.g. {username}_18 or {username}_1)"
+        }), 400
+
+    # 2. Check Email Uniqueness
+    execute_sql(cursor, conn, "SELECT id FROM users WHERE LOWER(email) = ?", (email,))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({
+            "error": f"An account with email '{email}' already exists. Please click 'Sign In'."
+        }), 400
 
     # Generate 6-digit OTP
     otp_code = str(random.randint(100000, 999999))
     expires_at = (datetime.utcnow() + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
 
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    try:
-        execute_sql(cursor, conn, "DELETE FROM otp_codes WHERE email = ?", (email,))
-        execute_sql(cursor, conn, 
-            "INSERT INTO otp_codes (email, code, expires_at) VALUES (?, ?, ?)",
-            (email, otp_code, expires_at)
-        )
-        conn.commit()
-    except Exception as e:
-        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
-            conn.close()
-            init_db()
-            conn = get_db()
-            cursor = conn.cursor()
-            execute_sql(cursor, conn, "DELETE FROM otp_codes WHERE email = ?", (email,))
-            execute_sql(cursor, conn, 
-                "INSERT INTO otp_codes (email, code, expires_at) VALUES (?, ?, ?)",
-                (email, otp_code, expires_at)
-            )
-            conn.commit()
-        else:
-            raise e
-
+    # Store OTP in DB
+    execute_sql(cursor, conn, "DELETE FROM otp_codes WHERE email = ?", (email,))
+    execute_sql(cursor, conn, 
+        "INSERT INTO otp_codes (email, code, expires_at) VALUES (?, ?, ?)",
+        (email, otp_code, expires_at)
+    )
+    conn.commit()
     conn.close()
 
     # Dispatch Email OTP
     sent_via_email, error_msg = send_otp_email(email, otp_code)
 
     res_data = {
-        "message": f"OTP Verification Code generated for {email}",
+        "message": f"Verification OTP code sent to {email}",
         "email": email,
+        "username": username,
+        "full_name": full_name,
         "email_sent": sent_via_email
     }
 
-    # Fallback notice & debug code if unconfigured or error
     if not sent_via_email:
         if is_smtp_configured():
-            res_data["dev_notice"] = f"SMTP Delivery Notice: {error_msg}. Demo Code: {otp_code}"
+            res_data["dev_notice"] = f"SMTP Delivery Notice: {error_msg}. Demo OTP: {otp_code}"
         else:
-            res_data["dev_notice"] = f"SMTP Email not configured yet. Demo Code: {otp_code}"
+            res_data["dev_notice"] = f"SMTP Email unconfigured. Demo OTP: {otp_code}"
         res_data["otp_debug"] = otp_code
 
     return jsonify(res_data)
 
-@app.route("/api/auth/verify-otp-set-password", methods=["POST"])
-def verify_otp_set_password():
+@app.route("/api/auth/register-verify-otp", methods=["POST"])
+def register_verify_otp():
     data = request.get_json() or {}
-    email = data.get("email", "").strip().lower()
-    otp_code = data.get("otp_code", "").strip()
-    password = data.get("password", "").strip()
     full_name = data.get("full_name", "").strip()
+    raw_username = data.get("username", "").strip()
+    email = data.get("email", "").strip().lower()
+    password = data.get("password", "").strip()
+    otp_code = data.get("otp_code", "").strip()
 
-    if not email or not otp_code:
-        return jsonify({"error": "Email and OTP code are required"}), 400
+    if not email or not otp_code or not password:
+        return jsonify({"error": "Email, Password, and OTP code are required"}), 400
 
-    if not password or len(password) < 4:
-        return jsonify({"error": "Password must be at least 4 characters long"}), 400
+    username = re.sub(r'[^a-zA-Z0-9_]', '', raw_username).lower() if raw_username else email.split("@")[0].lower()
 
     conn = get_db()
     cursor = conn.cursor()
 
-    try:
-        execute_sql(cursor, conn, "SELECT * FROM otp_codes WHERE email = ? AND code = ?", (email, otp_code))
-        otp_record = cursor.fetchone()
-    except Exception as e:
-        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
-            conn.close()
-            init_db()
-            conn = get_db()
-            cursor = conn.cursor()
-            execute_sql(cursor, conn, "SELECT * FROM otp_codes WHERE email = ? AND code = ?", (email, otp_code))
-            otp_record = cursor.fetchone()
-        else:
-            raise e
+    # Check OTP validity
+    execute_sql(cursor, conn, "SELECT * FROM otp_codes WHERE email = ? AND code = ?", (email, otp_code))
+    otp_record = cursor.fetchone()
 
     if not otp_record:
         conn.close()
@@ -320,30 +257,29 @@ def verify_otp_set_password():
 
     pwd_hash = generate_password_hash(password)
 
-    # Find or Create User
+    # Check existing user
     execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
-    user = to_dict(cursor.fetchone())
+    existing_user = to_dict(cursor.fetchone())
 
-    if not user:
-        name = full_name if full_name else email.split("@")[0].title()
+    if not existing_user:
         execute_sql(cursor, conn, 
-            "INSERT INTO users (email, password_hash, full_name, is_password_set) VALUES (?, ?, ?, 1)",
-            (email, pwd_hash, name)
+            "INSERT INTO users (username, email, password_hash, full_name, is_password_set) VALUES (?, ?, ?, ?, 1)",
+            (username, email, pwd_hash, full_name)
         )
         execute_sql(cursor, conn, "SELECT id FROM users WHERE email = ?", (email,))
         row = to_dict(cursor.fetchone())
         user_id = row["id"] if row else 1
         conn.commit()
-        user_dict = {"id": user_id, "email": email, "full_name": name}
+        user_dict = {"id": user_id, "username": username, "email": email, "full_name": full_name}
     else:
-        user_dict = dict(user)
-        name = full_name if full_name else user_dict["full_name"]
+        user_dict = dict(existing_user)
         execute_sql(cursor, conn, 
-            "UPDATE users SET password_hash = ?, is_password_set = 1, full_name = ? WHERE id = ?",
-            (pwd_hash, name, user_dict["id"])
+            "UPDATE users SET username = ?, password_hash = ?, is_password_set = 1, full_name = ? WHERE id = ?",
+            (username, pwd_hash, full_name, user_dict["id"])
         )
         conn.commit()
-        user_dict["full_name"] = name
+        user_dict["username"] = username
+        user_dict["full_name"] = full_name
 
     conn.close()
 
@@ -355,66 +291,32 @@ def verify_otp_set_password():
     )
 
     return jsonify({
-        "message": "Password saved and signed in successfully!",
+        "message": "Account created and signed in successfully!",
         "token": token,
-        "user": {"id": user_dict["id"], "email": user_dict["email"], "full_name": user_dict["full_name"]}
+        "user": {
+            "id": user_dict["id"],
+            "username": user_dict["username"],
+            "email": user_dict["email"],
+            "full_name": user_dict["full_name"]
+        }
     })
 
-@app.route("/api/auth/verify-otp", methods=["POST"])
-def verify_otp():
-    """Fallback OTP verification endpoint for quick sign-in without resetting password"""
-    data = request.get_json() or {}
-    email = data.get("email", "").strip().lower()
-    otp_code = data.get("otp_code", "").strip()
-    full_name = data.get("full_name", "").strip()
+# Backward compatibility routes
+@app.route("/api/auth/check-user", methods=["POST"])
+def check_user():
+    return login()
 
-    if not email or not otp_code:
-        return jsonify({"error": "Email and OTP code are required"}), 400
+@app.route("/api/auth/login-password", methods=["POST"])
+def login_password():
+    return login()
 
-    conn = get_db()
-    cursor = conn.cursor()
+@app.route("/api/auth/send-otp", methods=["POST"])
+def send_otp():
+    return register_send_otp()
 
-    execute_sql(cursor, conn, "SELECT * FROM otp_codes WHERE email = ? AND code = ?", (email, otp_code))
-    otp_record = cursor.fetchone()
-
-    if not otp_record:
-        conn.close()
-        return jsonify({"error": "Invalid or expired OTP code"}), 400
-
-    execute_sql(cursor, conn, "DELETE FROM otp_codes WHERE email = ?", (email,))
-
-    execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
-    user = to_dict(cursor.fetchone())
-
-    if not user:
-        name = full_name if full_name else email.split("@")[0].title()
-        default_pwd_hash = generate_password_hash(f"pwd_{otp_code}_{email}")
-        execute_sql(cursor, conn, 
-            "INSERT INTO users (email, password_hash, full_name, is_password_set) VALUES (?, ?, ?, 0)",
-            (email, default_pwd_hash, name)
-        )
-        execute_sql(cursor, conn, "SELECT id FROM users WHERE email = ?", (email,))
-        row = to_dict(cursor.fetchone())
-        user_id = row["id"] if row else 1
-        conn.commit()
-        user_dict = {"id": user_id, "email": email, "full_name": name, "is_password_set": 0}
-    else:
-        user_dict = dict(user)
-
-    conn.close()
-
-    token = jwt.encode(
-        {"user_id": user_dict["id"], "exp": datetime.utcnow() + timedelta(days=30)},
-        SECRET_KEY,
-        algorithm="HS256"
-    )
-
-    return jsonify({
-        "message": "OTP Verification successful!",
-        "token": token,
-        "user": {"id": user_dict["id"], "email": user_dict["email"], "full_name": user_dict["full_name"]},
-        "has_password": bool(user_dict.get("is_password_set", 0))
-    })
+@app.route("/api/auth/verify-otp-set-password", methods=["POST"])
+def verify_otp_set_password():
+    return register_verify_otp()
 
 @app.route("/api/auth/me", methods=["GET"])
 @token_required
