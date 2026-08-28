@@ -73,8 +73,8 @@ const Expenses = {
                 <th>Description</th>
                 <th>Type</th>
                 <th>Payment</th>
-                <th>Amount</th>
-                <th>Split Info</th>
+                <th>Your Share</th>
+                <th>Split Details</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -90,7 +90,12 @@ const Expenses = {
                     </span>
                   </td>
                   <td>${e.payment_mode}</td>
-                  <td><strong style="color: var(--text-main);">₹${e.amount.toLocaleString('en-IN')}</strong></td>
+                  <td>
+                    <strong style="color: var(--text-main);">₹${e.amount.toLocaleString('en-IN')}</strong>
+                    ${(e.total_bill_amount && e.total_bill_amount > e.amount) ? `
+                      <br><span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 400;">(Total Bill: ₹${e.total_bill_amount.toLocaleString('en-IN')})</span>
+                    ` : ''}
+                  </td>
                   <td>
                     ${e.split_with ? `
                       <span style="font-size: 0.85rem; color: var(--secondary);">Split with: <strong>${e.split_with}</strong></span>
@@ -152,8 +157,8 @@ const Expenses = {
             </select>
           </div>
           <div>
-            <label class="form-label">Amount (₹)</label>
-            <input type="number" step="0.01" class="form-input" id="exp-amount" placeholder="e.g. 250" required />
+            <label class="form-label" id="amount-label">Total Amount (₹)</label>
+            <input type="number" step="0.01" class="form-input" id="exp-amount" placeholder="e.g. 450" required />
           </div>
         </div>
 
@@ -176,13 +181,16 @@ const Expenses = {
         <div id="split-fields" style="display: none;">
           <div class="form-group">
             <label class="form-label">Split With (Names separated by commas)</label>
-            <input type="text" class="form-input" id="exp-splitwith" placeholder="e.g. Daksh, Amrit, Dhruv" />
+            <input type="text" class="form-input" id="exp-splitwith" placeholder="e.g. Amrit, Daksh" />
+            <span style="font-size: 0.8rem; color: var(--cyan); margin-top: 0.3rem; display: block;">
+              💡 <strong>Equal Split:</strong> Total amount will be divided equally (e.g. ₹450 total split with 1 friend = your ₹225 share logged).
+            </span>
           </div>
         </div>
 
         <div class="form-group">
           <label class="form-label">Description (Optional)</label>
-          <input type="text" class="form-input" id="exp-desc" placeholder="e.g. Pizza party at Daksh's place" />
+          <input type="text" class="form-input" id="exp-desc" placeholder="e.g. Dinner at restaurant with Amrit" />
         </div>
 
         <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
@@ -196,7 +204,11 @@ const Expenses = {
   toggleSplitFields() {
     const type = document.getElementById('exp-type').value;
     const splitFields = document.getElementById('split-fields');
+    const amountLabel = document.getElementById('amount-label');
     splitFields.style.display = (type === 'Split') ? 'block' : 'none';
+    if (amountLabel) {
+      amountLabel.innerText = (type === 'Split') ? 'Total Bill Amount (₹)' : 'Amount (₹)';
+    }
   },
 
   async handleAddSubmit(e) {

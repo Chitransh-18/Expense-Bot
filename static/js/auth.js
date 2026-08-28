@@ -1,7 +1,8 @@
 const Auth = {
   currentEmail: '',
   currentFullName: '',
-  step: 'email', // 'email' or 'otp'
+  currentOTP: '',
+  step: 'email', // 'email', 'password', 'otp', 'set_password'
   devNotice: '',
   debugOTP: '',
 
@@ -14,31 +15,57 @@ const Auth = {
           <div class="glass-card" style="width: 100%; max-width: 440px; padding: 2.8rem;">
             <div style="text-align: center; margin-bottom: 2.2rem;">
               <div class="brand-icon" style="width: 56px; height: 56px; margin: 0 auto 1.2rem auto; font-size: 1.8rem;">🔑</div>
-              <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: -0.02em;">OTP Verified Sign In</h2>
-              <p style="color: var(--text-muted); font-size: 0.95rem;">Enter your email to receive a 6-digit OTP code</p>
+              <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: -0.02em;">Welcome Back</h2>
+              <p style="color: var(--text-muted); font-size: 0.95rem;">Enter your email address to sign in or register</p>
             </div>
 
-            <form id="auth-email-form" onsubmit="Auth.handleSendOTP(event)">
-              <div class="form-group">
-                <label class="form-label">Full Name (Optional for new users)</label>
-                <input type="text" class="form-input" id="auth-fullname" placeholder="e.g. Chitransh Saxena" />
-              </div>
-              
+            <form id="auth-email-form" onsubmit="Auth.handleCheckEmail(event)">
               <div class="form-group">
                 <label class="form-label">Email Address</label>
-                <input type="email" class="form-input" id="auth-email" placeholder="name@example.com" value="${this.currentEmail}" required />
+                <input type="email" class="form-input" id="auth-email" placeholder="name@example.com" value="${this.currentEmail}" required autofocus />
               </div>
 
               <div id="auth-error" style="color: var(--danger); font-size: 0.85rem; margin-bottom: 1rem; display: none;"></div>
 
-              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="send-otp-btn">
-                <span>Request OTP Code</span> →
+              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="check-email-btn">
+                <span>Continue</span> →
               </button>
             </form>
           </div>
         </div>
       `;
-    } else {
+    } else if (this.step === 'password') {
+      mainContent.innerHTML = `
+        <div class="auth-overlay">
+          <div class="glass-card" style="width: 100%; max-width: 440px; padding: 2.8rem;">
+            <div style="text-align: center; margin-bottom: 2rem;">
+              <div class="brand-icon" style="width: 56px; height: 56px; margin: 0 auto 1.2rem auto; font-size: 1.8rem; background: linear-gradient(135deg, var(--primary), var(--cyan));">🔐</div>
+              <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.3rem;">Welcome Back</h2>
+              <p style="color: var(--cyan); font-weight: 600; font-size: 0.95rem; margin-bottom: 0.2rem;">${this.currentFullName || this.currentEmail}</p>
+              <p style="color: var(--text-muted); font-size: 0.85rem;">${this.currentEmail}</p>
+            </div>
+
+            <form id="auth-password-form" onsubmit="Auth.handlePasswordLogin(event)">
+              <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" id="auth-password" placeholder="Enter your password" required autofocus />
+              </div>
+
+              <div id="auth-error" style="color: var(--danger); font-size: 0.85rem; margin-bottom: 1rem; display: none;"></div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="login-pwd-btn">
+                ✅ Sign In
+              </button>
+            </form>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.8rem; font-size: 0.88rem;">
+              <a href="#" onclick="Auth.changeEmail(event)" style="color: var(--text-muted); text-decoration: none;">← Change Email</a>
+              <a href="#" onclick="Auth.requestOTPForReset(event)" style="color: var(--cyan); text-decoration: none;">Forgot Password? Sign in via OTP</a>
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (this.step === 'otp') {
       mainContent.innerHTML = `
         <div class="auth-overlay">
           <div class="glass-card" style="width: 100%; max-width: 460px; padding: 2.8rem;">
@@ -71,7 +98,7 @@ const Auth = {
               <div id="auth-error" style="color: var(--danger); font-size: 0.85rem; margin-bottom: 1rem; text-align: center; display: none;"></div>
 
               <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="verify-otp-btn">
-                ✅ Verify & Sign In
+                <span>Verify Code</span> →
               </button>
             </form>
 
@@ -83,7 +110,6 @@ const Auth = {
         </div>
       `;
 
-      // Auto fill debug code if present for demo/testing convenience
       if (this.debugOTP) {
         setTimeout(() => {
           const boxes = document.querySelectorAll('.otp-box');
@@ -92,19 +118,70 @@ const Auth = {
           }
         }, 100);
       }
+    } else if (this.step === 'set_password') {
+      mainContent.innerHTML = `
+        <div class="auth-overlay">
+          <div class="glass-card" style="width: 100%; max-width: 440px; padding: 2.8rem;">
+            <div style="text-align: center; margin-bottom: 2rem;">
+              <div class="brand-icon" style="width: 56px; height: 56px; margin: 0 auto 1.2rem auto; font-size: 1.8rem; background: linear-gradient(135deg, #10b981, var(--cyan));">🛡️</div>
+              <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem;">Create Your Password</h2>
+              <p style="color: var(--text-muted); font-size: 0.9rem;">Set a password for future fast logins without needing an OTP</p>
+            </div>
+
+            <form id="auth-set-pwd-form" onsubmit="Auth.handleSavePassword(event)">
+              <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input type="text" class="form-input" id="auth-fullname" placeholder="e.g. Chitransh Saxena" value="${this.currentFullName}" required />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">New Password</label>
+                <input type="password" class="form-input" id="auth-new-password" placeholder="Min. 4 characters" minlength="4" required autofocus />
+              </div>
+
+              <div id="auth-error" style="color: var(--danger); font-size: 0.85rem; margin-bottom: 1rem; display: none;"></div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="save-pwd-btn">
+                🚀 Complete Registration & Sign In
+              </button>
+            </form>
+          </div>
+        </div>
+      `;
     }
   },
 
-  async handleSendOTP(e) {
+  async handleCheckEmail(e) {
     e.preventDefault();
     const errorDiv = document.getElementById('auth-error');
     errorDiv.style.display = 'none';
 
-    this.currentEmail = document.getElementById('auth-email').value.trim();
-    this.currentFullName = document.getElementById('auth-fullname').value.trim();
-
+    this.currentEmail = document.getElementById('auth-email').value.trim().toLowerCase();
     if (!this.currentEmail) return;
 
+    try {
+      const res = await API.request('/api/auth/check-user', {
+        method: 'POST',
+        body: JSON.stringify({ email: this.currentEmail })
+      });
+
+      this.currentFullName = res.full_name || '';
+
+      if (res.exists && res.has_password) {
+        // Registered user with password -> Show Password Form
+        this.step = 'password';
+        this.renderAuthPage();
+      } else {
+        // New user or missing password -> Send OTP for verification
+        await this.sendOTP();
+      }
+    } catch (err) {
+      errorDiv.innerText = err.message || 'Error checking user';
+      errorDiv.style.display = 'block';
+    }
+  },
+
+  async sendOTP() {
     try {
       const res = await API.request('/api/auth/send-otp', {
         method: 'POST',
@@ -116,7 +193,36 @@ const Auth = {
       this.step = 'otp';
       this.renderAuthPage();
     } catch (err) {
-      errorDiv.innerText = err.message || 'Failed to send OTP code';
+      const errorDiv = document.getElementById('auth-error');
+      if (errorDiv) {
+        errorDiv.innerText = err.message || 'Failed to send OTP code';
+        errorDiv.style.display = 'block';
+      }
+    }
+  },
+
+  async handlePasswordLogin(e) {
+    e.preventDefault();
+    const errorDiv = document.getElementById('auth-error');
+    errorDiv.style.display = 'none';
+
+    const password = document.getElementById('auth-password').value.trim();
+    if (!password) return;
+
+    try {
+      const res = await API.request('/api/auth/login-password', {
+        method: 'POST',
+        body: JSON.stringify({ email: this.currentEmail, password })
+      });
+
+      if (res.token) {
+        API.setToken(res.token);
+        API.setUser(res.user);
+        this.step = 'email';
+        App.onAuthSuccess();
+      }
+    } catch (err) {
+      errorDiv.innerText = err.message || 'Invalid password';
       errorDiv.style.display = 'block';
     }
   },
@@ -136,13 +242,34 @@ const Auth = {
       return;
     }
 
+    this.currentOTP = otpCode;
+    // Switch to set password step
+    this.step = 'set_password';
+    this.renderAuthPage();
+  },
+
+  async handleSavePassword(e) {
+    e.preventDefault();
+    const errorDiv = document.getElementById('auth-error');
+    errorDiv.style.display = 'none';
+
+    const fullname = document.getElementById('auth-fullname').value.trim();
+    const password = document.getElementById('auth-new-password').value.trim();
+
+    if (!password || password.length < 4) {
+      errorDiv.innerText = 'Password must be at least 4 characters';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
     try {
-      const res = await API.request('/api/auth/verify-otp', {
+      const res = await API.request('/api/auth/verify-otp-set-password', {
         method: 'POST',
         body: JSON.stringify({
           email: this.currentEmail,
-          otp_code: otpCode,
-          full_name: this.currentFullName
+          otp_code: this.currentOTP,
+          password: password,
+          full_name: fullname || this.currentFullName
         })
       });
 
@@ -153,9 +280,14 @@ const Auth = {
         App.onAuthSuccess();
       }
     } catch (err) {
-      errorDiv.innerText = err.message || 'Verification failed. Check OTP code.';
+      errorDiv.innerText = err.message || 'Registration failed. Check OTP code or try again.';
       errorDiv.style.display = 'block';
     }
+  },
+
+  requestOTPForReset(e) {
+    e.preventDefault();
+    this.sendOTP();
   },
 
   handleDigitInput(input, index) {
@@ -183,6 +315,6 @@ const Auth = {
 
   resendOTP(e) {
     e.preventDefault();
-    this.handleSendOTP(e);
+    this.sendOTP();
   }
 };

@@ -32,6 +32,7 @@ def init_db():
             email VARCHAR(255) UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             full_name VARCHAR(255) NOT NULL,
+            is_password_set INTEGER DEFAULT 0,
             created_at {timestamp_type}
         )
     ''')
@@ -55,6 +56,7 @@ def init_db():
             expense_type VARCHAR(50) NOT NULL,
             category VARCHAR(100) NOT NULL,
             amount REAL NOT NULL,
+            total_bill_amount REAL,
             payment_mode VARCHAR(50) NOT NULL,
             description TEXT,
             date VARCHAR(20) NOT NULL,
@@ -81,6 +83,17 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
+
+    # Auto-migrations for existing databases
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN is_password_set INTEGER DEFAULT 0")
+    except Exception:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE expenses ADD COLUMN total_bill_amount REAL")
+    except Exception:
+        pass
 
     conn.commit()
     conn.close()

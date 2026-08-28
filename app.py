@@ -40,7 +40,7 @@ def token_required(f):
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
             conn = get_db()
             cursor = conn.cursor()
-            cursor.execute("SELECT id, email, full_name FROM users WHERE id = ?", (data["user_id"],))
+            cursor.execute("SELECT id, email, full_name, is_password_set FROM users WHERE id = ?", (data["user_id"],))
             current_user = cursor.fetchone()
             conn.close()
             if not current_user:
@@ -101,7 +101,76 @@ def test_smtp():
             "brevo_key_set": bool(brevo_key)
         }), 400
 
-# --- OTP Verified Authentication API Routes ---
+# --- Authentication & Password API Routes ---
+
+@app.route("/api/auth/check-user", methods=["POST"])
+def check_user():
+    data = request.get_json() or {}
+    email = data.get("email", "").strip().lower()
+
+    if not email:
+        return jsonify({"error": "Email address is required"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, email, full_name, is_password_set FROM users WHERE email = ?", (email,))
+    user = cursor.fetchone()
+    conn.close()
+
+    if user:
+        u_dict = dict(user)
+        return jsonify({
+            "exists": True,
+            "has_password": bool(u_dict.get("is_password_set", 0)),
+            "full_name": u_dict.get("full_name", "")
+        })
+    else:
+        return jsonify({
+            "exists": False,
+            "has_password": False,
+            "full_name": ""
+        })
+
+@app.route("/api/auth/login-password", methods=["POST"])
+def login_password():
+    data = request.get_json() or {}
+    email = data.get("email", "").strip().lower()
+    password = data.get("password", "").strip()
+
+    if not email or not password:
+        return jsonify({"error": "Email and password are required"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+    user = cursor.fetchone()
+    conn.close()
+
+    if not user:
+        return jsonify({"error": "User not found with this email"}), 400
+
+    user_dict = dict(user)
+
+    # Check password match
+    if not check_password_hash(user_dict["password_hash"], password):
+        return jsonify({"error": "Incorrect password. Try again or sign in via OTP."}), 400
+
+    # Generate JWT Token
+    token = jwt.encode(
+        {"user_id": user_dict["id"], "exp": datetime.utcnow() + timedelta(days=30)},
+        SECRET_KEY,
+        algorithm="HS256"
+    )
+
+    return jsonify({
+        "message": "Signed in successfully!",
+        "token": token,
+        "user": {
+            "id": user_dict["id"],
+            "email": user_dict["email"],
+            "full_name": user_dict["full_name"]
+        }
+    })
 
 @app.route("/api/auth/send-otp", methods=["POST"])
 def send_otp():
@@ -138,7 +207,7 @@ def send_otp():
         "email_sent": sent_via_email
     }
 
-    # If email delivery failed or SMTP is unconfigured, provide fallback notice and debug OTP
+    # Fallback notice & debug code if unconfigured or error
     if not sent_via_email:
         if is_smtp_configured():
             res_data["dev_notice"] = f"SMTP Delivery Notice: {error_msg}. Demo Code: {otp_code}"
@@ -148,15 +217,19 @@ def send_otp():
 
     return jsonify(res_data)
 
-@app.route("/api/auth/verify-otp", methods=["POST"])
-def verify_otp():
+@app.route("/api/auth/verify-otp-set-password", methods=["POST"])
+def verify_otp_set_password():
     data = request.get_json() or {}
     email = data.get("email", "").strip().lower()
     otp_code = data.get("otp_code", "").strip()
+    password = data.get("password", "").strip()
     full_name = data.get("full_name", "").strip()
 
     if not email or not otp_code:
         return jsonify({"error": "Email and OTP code are required"}), 400
+
+    if not password or len(password) < 4:
+        return jsonify({"error": "Password must be at least 4 characters long"}), 400
 
     conn = get_db()
     cursor = conn.cursor()
@@ -172,7 +245,69 @@ def verify_otp():
     # Delete used OTP
     cursor.execute("DELETE FROM otp_codes WHERE email = ?", (email,))
 
+    pwd_hash = generate_password_hash(password)
+
     # Find or Create User
+    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+    user = cursor.fetchone()
+
+    if not user:
+        name = full_name if full_name else email.split("@")[0].title()
+        cursor.execute(
+            "INSERT INTO users (email, password_hash, full_name, is_password_set) VALUES (?, ?, ?, 1)",
+            (email, pwd_hash, name)
+        )
+        user_id = cursor.lastrowid
+        conn.commit()
+        user_dict = {"id": user_id, "email": email, "full_name": name}
+    else:
+        user_dict = dict(user)
+        name = full_name if full_name else user_dict["full_name"]
+        cursor.execute(
+            "UPDATE users SET password_hash = ?, is_password_set = 1, full_name = ? WHERE id = ?",
+            (pwd_hash, name, user_dict["id"])
+        )
+        conn.commit()
+        user_dict["full_name"] = name
+
+    conn.close()
+
+    # Generate JWT Token
+    token = jwt.encode(
+        {"user_id": user_dict["id"], "exp": datetime.utcnow() + timedelta(days=30)},
+        SECRET_KEY,
+        algorithm="HS256"
+    )
+
+    return jsonify({
+        "message": "Password saved and signed in successfully!",
+        "token": token,
+        "user": {"id": user_dict["id"], "email": user_dict["email"], "full_name": user_dict["full_name"]}
+    })
+
+@app.route("/api/auth/verify-otp", methods=["POST"])
+def verify_otp():
+    """Fallback OTP verification endpoint for quick sign-in without resetting password"""
+    data = request.get_json() or {}
+    email = data.get("email", "").strip().lower()
+    otp_code = data.get("otp_code", "").strip()
+    full_name = data.get("full_name", "").strip()
+
+    if not email or not otp_code:
+        return jsonify({"error": "Email and OTP code are required"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM otp_codes WHERE email = ? AND code = ?", (email, otp_code))
+    otp_record = cursor.fetchone()
+
+    if not otp_record:
+        conn.close()
+        return jsonify({"error": "Invalid or expired OTP code"}), 400
+
+    cursor.execute("DELETE FROM otp_codes WHERE email = ?", (email,))
+
     cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
     user = cursor.fetchone()
 
@@ -180,20 +315,19 @@ def verify_otp():
         name = full_name if full_name else email.split("@")[0].title()
         default_pwd_hash = generate_password_hash(f"pwd_{otp_code}_{email}")
         cursor.execute(
-            "INSERT INTO users (email, password_hash, full_name) VALUES (?, ?, ?)",
+            "INSERT INTO users (email, password_hash, full_name, is_password_set) VALUES (?, ?, ?, 0)",
             (email, default_pwd_hash, name)
         )
         user_id = cursor.lastrowid
         conn.commit()
-        user = {"id": user_id, "email": email, "full_name": name}
+        user_dict = {"id": user_id, "email": email, "full_name": name, "is_password_set": 0}
     else:
-        user = dict(user)
+        user_dict = dict(user)
 
     conn.close()
 
-    # Generate JWT Token
     token = jwt.encode(
-        {"user_id": user["id"], "exp": datetime.utcnow() + timedelta(days=30)},
+        {"user_id": user_dict["id"], "exp": datetime.utcnow() + timedelta(days=30)},
         SECRET_KEY,
         algorithm="HS256"
     )
@@ -201,7 +335,8 @@ def verify_otp():
     return jsonify({
         "message": "OTP Verification successful!",
         "token": token,
-        "user": {"id": user["id"], "email": user["email"], "full_name": user["full_name"]}
+        "user": {"id": user_dict["id"], "email": user_dict["email"], "full_name": user_dict["full_name"]},
+        "has_password": bool(user_dict.get("is_password_set", 0))
     })
 
 @app.route("/api/auth/me", methods=["GET"])
@@ -247,22 +382,47 @@ def add_expense(current_user):
     data = request.get_json() or {}
     expense_type = data.get("expense_type", "Personal")
     category = data.get("category", "General")
-    amount = float(data.get("amount", 0))
+    raw_amount = float(data.get("amount", 0))
     payment_mode = data.get("payment_mode", "UPI")
     description = data.get("description", "")
     date_str = data.get("date") or datetime.now().strftime("%Y-%m-%d")
     split_with = data.get("split_with", "")
     split_type = data.get("split_type", "Equal")
 
-    if amount <= 0:
+    if raw_amount <= 0:
         return jsonify({"error": "Amount must be greater than 0"}), 400
+
+    total_bill_amount = raw_amount
+
+    # Calculate user share vs total bill for Split Expenses
+    if expense_type == "Split":
+        if split_type == "Equal":
+            # Equal split between user + split partner(s)
+            num_people = len([p for p in split_with.split(",") if p.strip()]) + 1 if split_with else 2
+            user_amount = total_bill_amount / float(num_people)
+        elif split_type == "Percentage":
+            user_percent = float(data.get("user_share_percent", 50))
+            user_amount = total_bill_amount * (user_percent / 100.0)
+        else:
+            user_amount = total_bill_amount / 2.0
+    else:
+        user_amount = total_bill_amount
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO expenses (user_id, expense_type, category, amount, payment_mode, description, date, split_with, split_type)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (current_user["id"], expense_type, category, amount, payment_mode, description, date_str, split_with, split_type))
+
+    # Check if total_bill_amount column exists in database schema
+    try:
+        cursor.execute('''
+            INSERT INTO expenses (user_id, expense_type, category, amount, total_bill_amount, payment_mode, description, date, split_with, split_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (current_user["id"], expense_type, category, user_amount, total_bill_amount, payment_mode, description, date_str, split_with, split_type))
+    except Exception:
+        cursor.execute('''
+            INSERT INTO expenses (user_id, expense_type, category, amount, payment_mode, description, date, split_with, split_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (current_user["id"], expense_type, category, user_amount, payment_mode, description, date_str, split_with, split_type))
+
     expense_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -273,7 +433,8 @@ def add_expense(current_user):
             "id": expense_id,
             "expense_type": expense_type,
             "category": category,
-            "amount": amount,
+            "amount": user_amount,
+            "total_bill_amount": total_bill_amount,
             "payment_mode": payment_mode,
             "description": description,
             "date": date_str,
@@ -389,10 +550,21 @@ def settle_recurring_bill(current_user, bill_id):
     cursor.execute("UPDATE recurring_bills SET last_settled_month = ? WHERE id = ?", (current_month_str, bill_id))
 
     desc = f"Monthly Bill: {bill['title']} (Paid by {bill['paid_by']})"
-    cursor.execute('''
-        INSERT INTO expenses (user_id, expense_type, category, amount, payment_mode, description, date, split_with, split_type)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (current_user["id"], "Split" if bill["paid_by"] != "Self" else "Personal", bill["category"], bill["user_share"], "Online", desc, today_str, bill["paid_by"] if bill["paid_by"] != "Self" else "", "Equal"))
+    
+    # Store net user share for settled recurring bill
+    user_share_amt = bill['user_share']
+    total_bill_amt = bill['total_amount']
+
+    try:
+        cursor.execute('''
+            INSERT INTO expenses (user_id, expense_type, category, amount, total_bill_amount, payment_mode, description, date, split_with, split_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (current_user["id"], "Split" if bill["paid_by"] != "Self" else "Personal", bill["category"], user_share_amt, total_bill_amt, "Online", desc, today_str, bill["paid_by"] if bill["paid_by"] != "Self" else "", "Equal"))
+    except Exception:
+        cursor.execute('''
+            INSERT INTO expenses (user_id, expense_type, category, amount, payment_mode, description, date, split_with, split_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (current_user["id"], "Split" if bill["paid_by"] != "Self" else "Personal", bill["category"], user_share_amt, "Online", desc, today_str, bill["paid_by"] if bill["paid_by"] != "Self" else "", "Equal"))
 
     conn.commit()
     conn.close()
@@ -447,7 +619,7 @@ def export_csv(current_user):
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["ID", "Expense Type", "Category", "Amount (INR)", "Payment Mode", "Description", "Date", "Split With", "Split Type", "Logged At"])
+    writer.writerow(["ID", "Expense Type", "Category", "User Share Amount (INR)", "Payment Mode", "Description", "Date", "Split With", "Split Type", "Logged At"])
 
     for row in rows:
         writer.writerow(list(row))
