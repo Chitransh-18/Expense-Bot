@@ -14,7 +14,7 @@ const Auth = {
     if (this.step === 'email') {
       formHTML = `
         <div style="text-align: left; margin-bottom: 2rem;">
-          <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: -0.02em; color: #fff;">Sign In or Register</h2>
+          <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: -0.02em; color: #0f172a;">Sign In or Register</h2>
           <p style="color: var(--text-muted); font-size: 0.95rem;">Enter your email to continue to ExpenseTracker Pro</p>
         </div>
 
@@ -34,8 +34,8 @@ const Auth = {
     } else if (this.step === 'password') {
       formHTML = `
         <div style="text-align: left; margin-bottom: 2rem;">
-          <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.3rem; color: #fff;">Welcome Back</h2>
-          <p style="color: var(--cyan); font-weight: 600; font-size: 1rem; margin-bottom: 0.2rem;">${this.currentFullName || this.currentEmail}</p>
+          <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.3rem; color: #0f172a;">Welcome Back</h2>
+          <p style="color: var(--cyan); font-weight: 700; font-size: 1rem; margin-bottom: 0.2rem;">${this.currentFullName || this.currentEmail}</p>
           <p style="color: var(--text-muted); font-size: 0.85rem;">${this.currentEmail}</p>
         </div>
 
@@ -60,16 +60,16 @@ const Auth = {
     } else if (this.step === 'otp') {
       formHTML = `
         <div style="text-align: left; margin-bottom: 1.8rem;">
-          <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; color: #fff;">Enter Verification Code</h2>
+          <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; color: #0f172a;">Enter Verification Code</h2>
           <p style="color: var(--text-muted); font-size: 0.95rem;">We sent a 6-digit OTP code to <strong style="color: var(--cyan);">${this.currentEmail}</strong></p>
         </div>
 
         ${this.debugOTP ? `
-          <div style="background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: var(--radius-md); padding: 0.9rem; text-align: center; margin-bottom: 1.5rem;">
-            <span style="font-size: 0.85rem; color: var(--cyan); font-weight: 600;">Demo Mode OTP Code: <strong style="font-size: 1.2rem; letter-spacing: 3px; color: #fff;">${this.debugOTP}</strong></span>
+          <div style="background: rgba(79, 70, 229, 0.08); border: 1px solid rgba(79, 70, 229, 0.25); border-radius: var(--radius-md); padding: 0.9rem; text-align: center; margin-bottom: 1.5rem;">
+            <span style="font-size: 0.85rem; color: #4f46e5; font-weight: 600;">Demo Mode OTP Code: <strong style="font-size: 1.2rem; letter-spacing: 3px; color: #0f172a;">${this.debugOTP}</strong></span>
           </div>
         ` : (this.devNotice ? `
-          <div style="background: rgba(6, 182, 212, 0.12); border: 1px dashed rgba(6, 182, 212, 0.4); border-radius: var(--radius-md); padding: 0.8rem; text-align: center; margin-bottom: 1.5rem; font-size: 0.82rem; color: var(--cyan);">
+          <div style="background: rgba(79, 70, 229, 0.08); border: 1px dashed rgba(79, 70, 229, 0.3); border-radius: var(--radius-md); padding: 0.8rem; text-align: center; margin-bottom: 1.5rem; font-size: 0.82rem; color: #4f46e5;">
             💡 ${this.devNotice}
           </div>
         ` : '')}
@@ -108,7 +108,7 @@ const Auth = {
     } else if (this.step === 'set_password') {
       formHTML = `
         <div style="text-align: left; margin-bottom: 2rem;">
-          <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; color: #fff;">Create Password</h2>
+          <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; color: #0f172a;">Create Password</h2>
           <p style="color: var(--text-muted); font-size: 0.9rem;">Set a password for future fast logins without needing an OTP</p>
         </div>
 
@@ -141,11 +141,11 @@ const Auth = {
             <div>
               <div style="display: flex; align-items: center; gap: 0.8rem; margin-bottom: 3rem;">
                 <div class="brand-icon" style="width: 48px; height: 48px; font-size: 1.6rem;">💰</div>
-                <span style="font-size: 1.6rem; font-weight: 800; color: #fff; letter-spacing: -0.03em;">ExpenseTracker</span>
+                <span style="font-size: 1.6rem; font-weight: 800; color: #0f172a; letter-spacing: -0.03em;">ExpenseTracker</span>
               </div>
 
-              <h1 style="font-size: 2.2rem; font-weight: 800; line-height: 1.25; margin-bottom: 1.2rem; color: #fff; letter-spacing: -0.03em;">
-                Smart Expense Tracking & <span style="background: linear-gradient(135deg, var(--cyan), var(--primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Split Manager</span>
+              <h1 style="font-size: 2.2rem; font-weight: 800; line-height: 1.25; margin-bottom: 1.2rem; color: #0f172a; letter-spacing: -0.03em;">
+                Smart Expense Tracking & <span style="background: linear-gradient(135deg, #ff6b6b, #ff8e53); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Split Manager</span>
               </h1>
               <p style="color: var(--text-muted); font-size: 0.98rem; line-height: 1.6; margin-bottom: 2.2rem;">
                 Log personal expenses, split recurring monthly bills (YouTube Premium, Wi-Fi, Rent), and sync real-time across your Phone and Laptop.
@@ -153,23 +153,23 @@ const Auth = {
 
               <div style="display: flex; flex-direction: column; gap: 1.1rem;">
                 <div style="display: flex; align-items: center; gap: 0.9rem;">
-                  <span style="font-size: 1.2rem; background: rgba(16,185,129,0.15); padding: 0.4rem; border-radius: 8px;">📱</span>
+                  <span style="font-size: 1.2rem; background: rgba(16,185,129,0.12); padding: 0.4rem; border-radius: 8px;">📱</span>
                   <div>
-                    <strong style="color: #fff; font-size: 0.92rem; display: block;">Installable PWA App</strong>
+                    <strong style="color: #0f172a; font-size: 0.92rem; display: block;">Installable PWA App</strong>
                     <span style="color: var(--text-muted); font-size: 0.82rem;">Install on iOS & Android in 1 tap</span>
                   </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.9rem;">
-                  <span style="font-size: 1.2rem; background: rgba(6,182,212,0.15); padding: 0.4rem; border-radius: 8px;">🔄</span>
+                  <span style="font-size: 1.2rem; background: rgba(79,70,229,0.12); padding: 0.4rem; border-radius: 8px;">🔄</span>
                   <div>
-                    <strong style="color: #fff; font-size: 0.92rem; display: block;">Real-Time Cloud Sync</strong>
+                    <strong style="color: #0f172a; font-size: 0.92rem; display: block;">Real-Time Cloud Sync</strong>
                     <span style="color: var(--text-muted); font-size: 0.82rem;">Phone entries instantly sync to laptop</span>
                   </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.9rem;">
-                  <span style="font-size: 1.2rem; background: rgba(99,102,241,0.15); padding: 0.4rem; border-radius: 8px;">📅</span>
+                  <span style="font-size: 1.2rem; background: rgba(255,107,107,0.12); padding: 0.4rem; border-radius: 8px;">📅</span>
                   <div>
-                    <strong style="color: #fff; font-size: 0.92rem; display: block;">Recurring Subscriptions</strong>
+                    <strong style="color: #0f172a; font-size: 0.92rem; display: block;">Recurring Subscriptions</strong>
                     <span style="color: var(--text-muted); font-size: 0.82rem;">Never miss YouTube, Rent or Wi-Fi bills</span>
                   </div>
                 </div>
@@ -177,7 +177,7 @@ const Auth = {
             </div>
 
             <div style="color: var(--text-dim); font-size: 0.82rem; border-top: 1px solid var(--border-glass); padding-top: 1.2rem; margin-top: 2rem;">
-              Protected by 256-bit JWT Encryption • ExpenseTracker Pro 2.0
+              Protected by 256-bit Encryption • ExpenseTracker Pro 2.0
             </div>
           </div>
 
