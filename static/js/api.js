@@ -25,6 +25,8 @@ const API = {
     const token = this.getToken();
     const headers = {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
       ...options.headers
     };
 
@@ -34,6 +36,7 @@ const API = {
 
     try {
       const response = await fetch(endpoint, {
+        cache: 'no-store',
         ...options,
         headers
       });
