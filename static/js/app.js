@@ -127,6 +127,44 @@ const App = {
     });
   },
 
+  openInstallHelpModal() {
+    document.getElementById('modal-title').innerText = '📱 Install App on Your Phone';
+    document.getElementById('modal-body').innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+        
+        <!-- Android Chrome Guide -->
+        <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: var(--radius-md); padding: 1.2rem;">
+          <h4 style="color: #10b981; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span>🤖</span> Android (Google Chrome)
+          </h4>
+          <ol style="color: var(--text-main); font-size: 0.9rem; line-height: 1.6; padding-left: 1.2rem;">
+            <li>Open <strong>https://expense-bot-1-jyl4.onrender.com</strong> in Chrome.</li>
+            <li>Tap the <strong>"📱 Install App"</strong> button at the bottom left.</li>
+            <li>Or tap Chrome's top-right <strong>⋮ (Three Dots)</strong> ➔ Select <strong>Add to Home screen</strong>.</li>
+          </ol>
+        </div>
+
+        <!-- iPhone Safari Guide -->
+        <div style="background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.25); border-radius: var(--radius-md); padding: 1.2rem;">
+          <h4 style="color: #06b6d4; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span>🍏</span> iPhone / iPad (Apple Safari)
+          </h4>
+          <ol style="color: var(--text-main); font-size: 0.9rem; line-height: 1.6; padding-left: 1.2rem;">
+            <li>Open <strong>https://expense-bot-1-jyl4.onrender.com</strong> in Apple Safari.</li>
+            <li>Tap the <strong>Share icon</strong> at the bottom bar (box with up arrow ⎋).</li>
+            <li>Scroll down the menu and tap <strong>Add to Home Screen (+)</strong>.</li>
+            <li>Tap <strong>Add</strong> in the top-right corner.</li>
+          </ol>
+        </div>
+
+        <button class="btn btn-primary" onclick="App.closeModal()" style="width: 100%;">
+          Got It!
+        </button>
+      </div>
+    `;
+    this.openModal();
+  },
+
   onAuthSuccess() {
     window.location.hash = '#dashboard';
     this.handleRoute();
