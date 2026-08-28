@@ -7,10 +7,16 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 def get_db():
     """Get database connection (PostgreSQL if DATABASE_URL set, otherwise SQLite)"""
     if DATABASE_URL:
-        import psycopg2
-        from psycopg2.extras import RealDictCursor
-        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-        return conn
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+            return conn
+        except Exception as e:
+            print(f"⚠️ PostgreSQL connection warning: {e}. Falling back to SQLite.")
+            conn = sqlite3.connect(DATABASE_PATH)
+            conn.row_factory = sqlite3.Row
+            return conn
     else:
         conn = sqlite3.connect(DATABASE_PATH)
         conn.row_factory = sqlite3.Row
@@ -21,7 +27,7 @@ def init_db():
     conn = get_db()
     cursor = conn.cursor()
 
-    is_postgres = bool(DATABASE_URL)
+    is_postgres = bool(DATABASE_URL) and not isinstance(conn, sqlite3.Connection)
     auto_id_type = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
     timestamp_type = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
 
@@ -100,4 +106,4 @@ def init_db():
 
 if __name__ == "__main__":
     init_db()
-    print(f"Database initialized successfully ({'PostgreSQL' if DATABASE_URL else 'SQLite'}).")
+    print(f"Database initialized successfully ({'PostgreSQL' if (DATABASE_URL and 'psycopg2' in str(type(get_db()))) else 'SQLite'}).")
