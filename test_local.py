@@ -1,5 +1,6 @@
 import sys
 import json
+import random
 from app import app, init_db
 
 def run_tests():
@@ -7,24 +8,28 @@ def run_tests():
     init_db()
     client = app.test_client()
 
-    # 1. Test registration - Send OTP with username chitransh_local
+    rand_id = random.randint(100, 999)
+    test_user = f"user_test_{rand_id}"
+    test_email = f"user_test_{rand_id}@gmail.com"
+
+    # 1. Test registration - Send OTP
     res = client.post('/api/auth/register-send-otp', json={
         'full_name': 'Chitransh Saxena',
-        'username': 'chitransh_local',
-        'email': 'chitransh_test@gmail.com',
+        'username': test_user,
+        'email': test_email,
         'password': 'password123'
     })
     assert res.status_code == 200, f"register-send-otp failed: {res.data}"
     data = res.get_json()
-    assert data['username'] == 'chitransh_local', "username parsing failed"
+    assert data['username'] == test_user, "username parsing failed"
     print("[PASS] /api/auth/register-send-otp passed!")
 
     # 2. Test registration - Verify OTP & Create User
     otp_code = data.get('otp_debug', '123456')
     res = client.post('/api/auth/register-verify-otp', json={
         'full_name': 'Chitransh Saxena',
-        'username': 'chitransh_local',
-        'email': 'chitransh_test@gmail.com',
+        'username': test_user,
+        'email': test_email,
         'password': 'password123',
         'otp_code': otp_code
     })
@@ -37,8 +42,8 @@ def run_tests():
     # 3. Test Username Uniqueness Rejection
     res = client.post('/api/auth/register-send-otp', json={
         'full_name': 'Another User',
-        'username': 'chitransh_local', # Duplicate!
-        'email': 'another_test@gmail.com',
+        'username': test_user, # Duplicate!
+        'email': f'another_{rand_id}@gmail.com',
         'password': 'password123'
     })
     assert res.status_code == 400, f"Duplicate username check should fail, got status {res.status_code}"
@@ -48,16 +53,16 @@ def run_tests():
 
     # 4. Test Sign-In with Username + Password
     res = client.post('/api/auth/login', json={
-        'username_or_email': 'chitransh_local',
+        'username_or_email': test_user,
         'password': 'password123'
     })
     assert res.status_code == 200, f"login with username failed: {res.data}"
-    assert res.get_json()['user']['username'] == 'chitransh_local', "login user format invalid"
+    assert res.get_json()['user']['username'] == test_user, "login user format invalid"
     print("[PASS] /api/auth/login with Username passed!")
 
     # 5. Test Sign-In with Email + Password
     res = client.post('/api/auth/login', json={
-        'username_or_email': 'chitransh_test@gmail.com',
+        'username_or_email': test_email,
         'password': 'password123'
     })
     assert res.status_code == 200, f"login with email failed: {res.data}"

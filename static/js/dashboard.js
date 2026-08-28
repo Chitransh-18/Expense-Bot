@@ -38,13 +38,13 @@ const Dashboard = {
     let html = `
       <div class="top-bar">
         <div>
-          <div style="font-size: 0.85rem; color: var(--cyan); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.2rem;">
+          <div style="font-size: 0.82rem; color: #4f46e5; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.4rem;">
             📅 ${todayFormatted}
           </div>
           <h2 class="page-title">${greeting.emoji} ${greeting.text}, ${name}!</h2>
-          <p style="color: var(--text-muted); font-size: 0.95rem;">Here is your financial status & recurring bill overview</p>
+          <p style="color: var(--text-muted); font-size: 0.98rem; margin-top: 0.2rem;">Here is your financial status & recurring bill overview</p>
         </div>
-        <div style="display: flex; gap: 0.8rem; flex-wrap: wrap;">
+        <div style="display: flex; gap: 0.9rem; align-items: center; margin-top: 0.8rem;">
           <button class="btn btn-secondary" onclick="Dashboard.openMonthlyReportModal()">
             📊 Monthly Report
           </button>
