@@ -22,17 +22,24 @@ def get_db():
         conn.row_factory = sqlite3.Row
         return conn
 
+def execute_sql(cursor, conn, query, params=()):
+    """Execute SQL query with automatic placeholder compatibility for PostgreSQL (%s) vs SQLite (?)"""
+    is_postgres = not isinstance(conn, sqlite3.Connection)
+    if is_postgres:
+        query = query.replace("?", "%s")
+    cursor.execute(query, params)
+
 def init_db():
     """Initialize database tables for PostgreSQL or SQLite"""
     conn = get_db()
     cursor = conn.cursor()
 
-    is_postgres = bool(DATABASE_URL) and not isinstance(conn, sqlite3.Connection)
+    is_postgres = not isinstance(conn, sqlite3.Connection)
     auto_id_type = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
     timestamp_type = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
 
     # Users Table
-    cursor.execute(f'''
+    execute_sql(cursor, conn, f'''
         CREATE TABLE IF NOT EXISTS users (
             id {auto_id_type},
             email VARCHAR(255) UNIQUE NOT NULL,
@@ -44,7 +51,7 @@ def init_db():
     ''')
 
     # OTP Codes Table
-    cursor.execute(f'''
+    execute_sql(cursor, conn, f'''
         CREATE TABLE IF NOT EXISTS otp_codes (
             id {auto_id_type},
             email VARCHAR(255) NOT NULL,
@@ -55,7 +62,7 @@ def init_db():
     ''')
 
     # Expenses Table
-    cursor.execute(f'''
+    execute_sql(cursor, conn, f'''
         CREATE TABLE IF NOT EXISTS expenses (
             id {auto_id_type},
             user_id INTEGER NOT NULL,
@@ -74,7 +81,7 @@ def init_db():
     ''')
 
     # Recurring Monthly Bills Table
-    cursor.execute(f'''
+    execute_sql(cursor, conn, f'''
         CREATE TABLE IF NOT EXISTS recurring_bills (
             id {auto_id_type},
             user_id INTEGER NOT NULL,
@@ -92,12 +99,12 @@ def init_db():
 
     # Auto-migrations for existing databases
     try:
-        cursor.execute("ALTER TABLE users ADD COLUMN is_password_set INTEGER DEFAULT 0")
+        execute_sql(cursor, conn, "ALTER TABLE users ADD COLUMN is_password_set INTEGER DEFAULT 0")
     except Exception:
         pass
 
     try:
-        cursor.execute("ALTER TABLE expenses ADD COLUMN total_bill_amount REAL")
+        execute_sql(cursor, conn, "ALTER TABLE expenses ADD COLUMN total_bill_amount REAL")
     except Exception:
         pass
 

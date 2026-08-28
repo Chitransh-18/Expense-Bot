@@ -12,7 +12,7 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from config import SECRET_KEY, PORT, DEBUG
-from database import init_db, get_db
+from database import init_db, get_db, execute_sql
 from services.email_service import send_otp_email, is_smtp_configured, get_smtp_config
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -40,7 +40,7 @@ def token_required(f):
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
             conn = get_db()
             cursor = conn.cursor()
-            cursor.execute("SELECT id, email, full_name, is_password_set FROM users WHERE id = ?", (data["user_id"],))
+            execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE id = ?", (data["user_id"],))
             current_user = cursor.fetchone()
             conn.close()
             if not current_user:
@@ -113,7 +113,7 @@ def check_user():
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, email, full_name, is_password_set FROM users WHERE email = ?", (email,))
+    execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE email = ?", (email,))
     user = cursor.fetchone()
     conn.close()
 
@@ -142,7 +142,7 @@ def login_password():
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+    execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
     user = cursor.fetchone()
     conn.close()
 
@@ -188,10 +188,10 @@ def send_otp():
     cursor = conn.cursor()
     
     # Delete old OTPs for this email
-    cursor.execute("DELETE FROM otp_codes WHERE email = ?", (email,))
+    execute_sql(cursor, conn, "DELETE FROM otp_codes WHERE email = ?", (email,))
     
     # Insert new OTP
-    cursor.execute(
+    execute_sql(cursor, conn, 
         "INSERT INTO otp_codes (email, code, expires_at) VALUES (?, ?, ?)",
         (email, otp_code, expires_at)
     )
@@ -235,7 +235,7 @@ def verify_otp_set_password():
     cursor = conn.cursor()
 
     # Check OTP validity
-    cursor.execute("SELECT * FROM otp_codes WHERE email = ? AND code = ?", (email, otp_code))
+    execute_sql(cursor, conn, "SELECT * FROM otp_codes WHERE email = ? AND code = ?", (email, otp_code))
     otp_record = cursor.fetchone()
 
     if not otp_record:
@@ -243,27 +243,29 @@ def verify_otp_set_password():
         return jsonify({"error": "Invalid or expired OTP code"}), 400
 
     # Delete used OTP
-    cursor.execute("DELETE FROM otp_codes WHERE email = ?", (email,))
+    execute_sql(cursor, conn, "DELETE FROM otp_codes WHERE email = ?", (email,))
 
     pwd_hash = generate_password_hash(password)
 
     # Find or Create User
-    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+    execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
     user = cursor.fetchone()
 
     if not user:
         name = full_name if full_name else email.split("@")[0].title()
-        cursor.execute(
+        execute_sql(cursor, conn, 
             "INSERT INTO users (email, password_hash, full_name, is_password_set) VALUES (?, ?, ?, 1)",
             (email, pwd_hash, name)
         )
-        user_id = cursor.lastrowid
+        execute_sql(cursor, conn, "SELECT id FROM users WHERE email = ?", (email,))
+        row = cursor.fetchone()
+        user_id = dict(row)["id"] if row else 1
         conn.commit()
         user_dict = {"id": user_id, "email": email, "full_name": name}
     else:
         user_dict = dict(user)
         name = full_name if full_name else user_dict["full_name"]
-        cursor.execute(
+        execute_sql(cursor, conn, 
             "UPDATE users SET password_hash = ?, is_password_set = 1, full_name = ? WHERE id = ?",
             (pwd_hash, name, user_dict["id"])
         )
@@ -299,26 +301,28 @@ def verify_otp():
     conn = get_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM otp_codes WHERE email = ? AND code = ?", (email, otp_code))
+    execute_sql(cursor, conn, "SELECT * FROM otp_codes WHERE email = ? AND code = ?", (email, otp_code))
     otp_record = cursor.fetchone()
 
     if not otp_record:
         conn.close()
         return jsonify({"error": "Invalid or expired OTP code"}), 400
 
-    cursor.execute("DELETE FROM otp_codes WHERE email = ?", (email,))
+    execute_sql(cursor, conn, "DELETE FROM otp_codes WHERE email = ?", (email,))
 
-    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+    execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
     user = cursor.fetchone()
 
     if not user:
         name = full_name if full_name else email.split("@")[0].title()
         default_pwd_hash = generate_password_hash(f"pwd_{otp_code}_{email}")
-        cursor.execute(
+        execute_sql(cursor, conn, 
             "INSERT INTO users (email, password_hash, full_name, is_password_set) VALUES (?, ?, ?, 0)",
             (email, default_pwd_hash, name)
         )
-        user_id = cursor.lastrowid
+        execute_sql(cursor, conn, "SELECT id FROM users WHERE email = ?", (email,))
+        row = cursor.fetchone()
+        user_id = dict(row)["id"] if row else 1
         conn.commit()
         user_dict = {"id": user_id, "email": email, "full_name": name, "is_password_set": 0}
     else:
@@ -361,7 +365,7 @@ def get_expenses(current_user):
         params.append(category)
 
     query += " ORDER BY date DESC, id DESC"
-    cursor.execute(query, params)
+    execute_sql(cursor, conn, query, params)
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
 
@@ -397,7 +401,6 @@ def add_expense(current_user):
     # Calculate user share vs total bill for Split Expenses
     if expense_type == "Split":
         if split_type == "Equal":
-            # Equal split between user + split partner(s)
             num_people = len([p for p in split_with.split(",") if p.strip()]) + 1 if split_with else 2
             user_amount = total_bill_amount / float(num_people)
         elif split_type == "Percentage":
@@ -411,19 +414,20 @@ def add_expense(current_user):
     conn = get_db()
     cursor = conn.cursor()
 
-    # Check if total_bill_amount column exists in database schema
     try:
-        cursor.execute('''
+        execute_sql(cursor, conn, '''
             INSERT INTO expenses (user_id, expense_type, category, amount, total_bill_amount, payment_mode, description, date, split_with, split_type)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (current_user["id"], expense_type, category, user_amount, total_bill_amount, payment_mode, description, date_str, split_with, split_type))
     except Exception:
-        cursor.execute('''
+        execute_sql(cursor, conn, '''
             INSERT INTO expenses (user_id, expense_type, category, amount, payment_mode, description, date, split_with, split_type)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (current_user["id"], expense_type, category, user_amount, payment_mode, description, date_str, split_with, split_type))
 
-    expense_id = cursor.lastrowid
+    execute_sql(cursor, conn, "SELECT id FROM expenses WHERE user_id = ? ORDER BY id DESC LIMIT 1", (current_user["id"],))
+    row = cursor.fetchone()
+    expense_id = dict(row)["id"] if row else 1
     conn.commit()
     conn.close()
 
@@ -448,7 +452,7 @@ def add_expense(current_user):
 def delete_expense(current_user, expense_id):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM expenses WHERE id = ? AND user_id = ?", (expense_id, current_user["id"]))
+    execute_sql(cursor, conn, "DELETE FROM expenses WHERE id = ? AND user_id = ?", (expense_id, current_user["id"]))
     affected = cursor.rowcount
     conn.commit()
     conn.close()
@@ -463,7 +467,7 @@ def delete_expense(current_user, expense_id):
 def get_recurring_bills(current_user):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM recurring_bills WHERE user_id = ? ORDER BY due_day ASC", (current_user["id"],))
+    execute_sql(cursor, conn, "SELECT * FROM recurring_bills WHERE user_id = ? ORDER BY due_day ASC", (current_user["id"],))
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
 
@@ -521,11 +525,13 @@ def add_recurring_bill(current_user):
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('''
+    execute_sql(cursor, conn, '''
         INSERT INTO recurring_bills (user_id, title, total_amount, user_share, paid_by, due_day, category)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     ''', (current_user["id"], title, total_amount, user_share, paid_by, due_day, category))
-    bill_id = cursor.lastrowid
+    execute_sql(cursor, conn, "SELECT id FROM recurring_bills WHERE user_id = ? ORDER BY id DESC LIMIT 1", (current_user["id"],))
+    row = cursor.fetchone()
+    bill_id = dict(row)["id"] if row else 1
     conn.commit()
     conn.close()
 
@@ -536,7 +542,7 @@ def add_recurring_bill(current_user):
 def settle_recurring_bill(current_user, bill_id):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM recurring_bills WHERE id = ? AND user_id = ?", (bill_id, current_user["id"]))
+    execute_sql(cursor, conn, "SELECT * FROM recurring_bills WHERE id = ? AND user_id = ?", (bill_id, current_user["id"]))
     bill = cursor.fetchone()
 
     if not bill:
@@ -547,21 +553,19 @@ def settle_recurring_bill(current_user, bill_id):
     current_month_str = now.strftime("%Y-%m")
     today_str = now.strftime("%Y-%m-%d")
 
-    cursor.execute("UPDATE recurring_bills SET last_settled_month = ? WHERE id = ?", (current_month_str, bill_id))
+    execute_sql(cursor, conn, "UPDATE recurring_bills SET last_settled_month = ? WHERE id = ?", (current_month_str, bill_id))
 
     desc = f"Monthly Bill: {bill['title']} (Paid by {bill['paid_by']})"
-    
-    # Store net user share for settled recurring bill
     user_share_amt = bill['user_share']
     total_bill_amt = bill['total_amount']
 
     try:
-        cursor.execute('''
+        execute_sql(cursor, conn, '''
             INSERT INTO expenses (user_id, expense_type, category, amount, total_bill_amount, payment_mode, description, date, split_with, split_type)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (current_user["id"], "Split" if bill["paid_by"] != "Self" else "Personal", bill["category"], user_share_amt, total_bill_amt, "Online", desc, today_str, bill["paid_by"] if bill["paid_by"] != "Self" else "", "Equal"))
     except Exception:
-        cursor.execute('''
+        execute_sql(cursor, conn, '''
             INSERT INTO expenses (user_id, expense_type, category, amount, payment_mode, description, date, split_with, split_type)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (current_user["id"], "Split" if bill["paid_by"] != "Self" else "Personal", bill["category"], user_share_amt, "Online", desc, today_str, bill["paid_by"] if bill["paid_by"] != "Self" else "", "Equal"))
@@ -580,7 +584,7 @@ def settle_recurring_bill(current_user, bill_id):
 def get_analytics(current_user):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM expenses WHERE user_id = ?", (current_user["id"],))
+    execute_sql(cursor, conn, "SELECT * FROM expenses WHERE user_id = ?", (current_user["id"],))
     expenses = [dict(r) for r in cursor.fetchall()]
     conn.close()
 
@@ -613,7 +617,7 @@ def get_analytics(current_user):
 def export_csv(current_user):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, expense_type, category, amount, payment_mode, description, date, split_with, split_type, created_at FROM expenses WHERE user_id = ? ORDER BY date DESC", (current_user["id"],))
+    execute_sql(cursor, conn, "SELECT id, expense_type, category, amount, payment_mode, description, date, split_with, split_type, created_at FROM expenses WHERE user_id = ? ORDER BY date DESC", (current_user["id"],))
     rows = cursor.fetchall()
     conn.close()
 

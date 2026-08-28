@@ -49,7 +49,20 @@ const API = {
         return { error: 'Session expired. Please log in again.' };
       }
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      let data = {};
+
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.warn('Non-JSON response received:', text);
+        if (!response.ok) {
+          throw new Error('Server is initializing or updating. Please try again in a moment.');
+        }
+        return { message: text };
+      }
+
       if (!response.ok) {
         throw new Error(data.error || 'API Request failed');
       }
