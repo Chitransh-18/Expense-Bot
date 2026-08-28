@@ -25,6 +25,12 @@ init_db()
 @app.errorhandler(Exception)
 def handle_exception(e):
     print(f"❌ Global API Exception: {e}")
+    # Auto-repair tables if missing table relation error occurs
+    if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+        try:
+            init_db()
+        except Exception:
+            pass
     return jsonify({"error": f"Server Error: {str(e)}"}), 500
 
 # --- Auth Helper Decorator ---
@@ -46,8 +52,19 @@ def token_required(f):
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
             conn = get_db()
             cursor = conn.cursor()
-            execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE id = ?", (data["user_id"],))
-            user_row = cursor.fetchone()
+            try:
+                execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE id = ?", (data["user_id"],))
+                user_row = cursor.fetchone()
+            except Exception as e:
+                if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+                    conn.close()
+                    init_db()
+                    conn = get_db()
+                    cursor = conn.cursor()
+                    execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE id = ?", (data["user_id"],))
+                    user_row = cursor.fetchone()
+                else:
+                    raise e
             conn.close()
             current_user = to_dict(user_row)
             if not current_user:
@@ -120,8 +137,21 @@ def check_user():
 
     conn = get_db()
     cursor = conn.cursor()
-    execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE email = ?", (email,))
-    user_row = cursor.fetchone()
+    
+    try:
+        execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE email = ?", (email,))
+        user_row = cursor.fetchone()
+    except Exception as e:
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            conn.close()
+            init_db()
+            conn = get_db()
+            cursor = conn.cursor()
+            execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE email = ?", (email,))
+            user_row = cursor.fetchone()
+        else:
+            raise e
+
     conn.close()
 
     user = to_dict(user_row)
@@ -150,8 +180,21 @@ def login_password():
 
     conn = get_db()
     cursor = conn.cursor()
-    execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
-    user_row = cursor.fetchone()
+
+    try:
+        execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
+        user_row = cursor.fetchone()
+    except Exception as e:
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            conn.close()
+            init_db()
+            conn = get_db()
+            cursor = conn.cursor()
+            execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
+            user_row = cursor.fetchone()
+        else:
+            raise e
+
     conn.close()
 
     user = to_dict(user_row)
@@ -194,15 +237,28 @@ def send_otp():
     conn = get_db()
     cursor = conn.cursor()
     
-    # Delete old OTPs for this email
-    execute_sql(cursor, conn, "DELETE FROM otp_codes WHERE email = ?", (email,))
-    
-    # Insert new OTP
-    execute_sql(cursor, conn, 
-        "INSERT INTO otp_codes (email, code, expires_at) VALUES (?, ?, ?)",
-        (email, otp_code, expires_at)
-    )
-    conn.commit()
+    try:
+        execute_sql(cursor, conn, "DELETE FROM otp_codes WHERE email = ?", (email,))
+        execute_sql(cursor, conn, 
+            "INSERT INTO otp_codes (email, code, expires_at) VALUES (?, ?, ?)",
+            (email, otp_code, expires_at)
+        )
+        conn.commit()
+    except Exception as e:
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            conn.close()
+            init_db()
+            conn = get_db()
+            cursor = conn.cursor()
+            execute_sql(cursor, conn, "DELETE FROM otp_codes WHERE email = ?", (email,))
+            execute_sql(cursor, conn, 
+                "INSERT INTO otp_codes (email, code, expires_at) VALUES (?, ?, ?)",
+                (email, otp_code, expires_at)
+            )
+            conn.commit()
+        else:
+            raise e
+
     conn.close()
 
     # Dispatch Email OTP
@@ -241,9 +297,19 @@ def verify_otp_set_password():
     conn = get_db()
     cursor = conn.cursor()
 
-    # Check OTP validity
-    execute_sql(cursor, conn, "SELECT * FROM otp_codes WHERE email = ? AND code = ?", (email, otp_code))
-    otp_record = cursor.fetchone()
+    try:
+        execute_sql(cursor, conn, "SELECT * FROM otp_codes WHERE email = ? AND code = ?", (email, otp_code))
+        otp_record = cursor.fetchone()
+    except Exception as e:
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            conn.close()
+            init_db()
+            conn = get_db()
+            cursor = conn.cursor()
+            execute_sql(cursor, conn, "SELECT * FROM otp_codes WHERE email = ? AND code = ?", (email, otp_code))
+            otp_record = cursor.fetchone()
+        else:
+            raise e
 
     if not otp_record:
         conn.close()
@@ -372,8 +438,21 @@ def get_expenses(current_user):
         params.append(category)
 
     query += " ORDER BY date DESC, id DESC"
-    execute_sql(cursor, conn, query, params)
-    rows = [to_dict(r) for r in cursor.fetchall()]
+    
+    try:
+        execute_sql(cursor, conn, query, params)
+        rows = [to_dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            conn.close()
+            init_db()
+            conn = get_db()
+            cursor = conn.cursor()
+            execute_sql(cursor, conn, query, params)
+            rows = [to_dict(r) for r in cursor.fetchall()]
+        else:
+            raise e
+
     conn.close()
 
     now = datetime.now()
@@ -422,20 +501,34 @@ def add_expense(current_user):
     cursor = conn.cursor()
 
     try:
-        execute_sql(cursor, conn, '''
-            INSERT INTO expenses (user_id, expense_type, category, amount, total_bill_amount, payment_mode, description, date, split_with, split_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (current_user["id"], expense_type, category, user_amount, total_bill_amount, payment_mode, description, date_str, split_with, split_type))
-    except Exception:
-        execute_sql(cursor, conn, '''
-            INSERT INTO expenses (user_id, expense_type, category, amount, payment_mode, description, date, split_with, split_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (current_user["id"], expense_type, category, user_amount, payment_mode, description, date_str, split_with, split_type))
+        try:
+            execute_sql(cursor, conn, '''
+                INSERT INTO expenses (user_id, expense_type, category, amount, total_bill_amount, payment_mode, description, date, split_with, split_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (current_user["id"], expense_type, category, user_amount, total_bill_amount, payment_mode, description, date_str, split_with, split_type))
+        except Exception:
+            execute_sql(cursor, conn, '''
+                INSERT INTO expenses (user_id, expense_type, category, amount, payment_mode, description, date, split_with, split_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (current_user["id"], expense_type, category, user_amount, payment_mode, description, date_str, split_with, split_type))
+        conn.commit()
+    except Exception as e:
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            conn.close()
+            init_db()
+            conn = get_db()
+            cursor = conn.cursor()
+            execute_sql(cursor, conn, '''
+                INSERT INTO expenses (user_id, expense_type, category, amount, total_bill_amount, payment_mode, description, date, split_with, split_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (current_user["id"], expense_type, category, user_amount, total_bill_amount, payment_mode, description, date_str, split_with, split_type))
+            conn.commit()
+        else:
+            raise e
 
     execute_sql(cursor, conn, "SELECT id FROM expenses WHERE user_id = ? ORDER BY id DESC LIMIT 1", (current_user["id"],))
     row = to_dict(cursor.fetchone())
     expense_id = row["id"] if row else 1
-    conn.commit()
     conn.close()
 
     return jsonify({
@@ -474,8 +567,21 @@ def delete_expense(current_user, expense_id):
 def get_recurring_bills(current_user):
     conn = get_db()
     cursor = conn.cursor()
-    execute_sql(cursor, conn, "SELECT * FROM recurring_bills WHERE user_id = ? ORDER BY due_day ASC", (current_user["id"],))
-    rows = [to_dict(r) for r in cursor.fetchall()]
+    
+    try:
+        execute_sql(cursor, conn, "SELECT * FROM recurring_bills WHERE user_id = ? ORDER BY due_day ASC", (current_user["id"],))
+        rows = [to_dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            conn.close()
+            init_db()
+            conn = get_db()
+            cursor = conn.cursor()
+            execute_sql(cursor, conn, "SELECT * FROM recurring_bills WHERE user_id = ? ORDER BY due_day ASC", (current_user["id"],))
+            rows = [to_dict(r) for r in cursor.fetchall()]
+        else:
+            raise e
+
     conn.close()
 
     now = datetime.now()
@@ -592,8 +698,21 @@ def settle_recurring_bill(current_user, bill_id):
 def get_analytics(current_user):
     conn = get_db()
     cursor = conn.cursor()
-    execute_sql(cursor, conn, "SELECT * FROM expenses WHERE user_id = ?", (current_user["id"],))
-    expenses = [to_dict(r) for r in cursor.fetchall()]
+    
+    try:
+        execute_sql(cursor, conn, "SELECT * FROM expenses WHERE user_id = ?", (current_user["id"],))
+        expenses = [to_dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            conn.close()
+            init_db()
+            conn = get_db()
+            cursor = conn.cursor()
+            execute_sql(cursor, conn, "SELECT * FROM expenses WHERE user_id = ?", (current_user["id"],))
+            expenses = [to_dict(r) for r in cursor.fetchall()]
+        else:
+            raise e
+
     conn.close()
 
     total_spent = sum(e["amount"] for e in expenses)
