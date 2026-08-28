@@ -29,6 +29,19 @@ def execute_sql(cursor, conn, query, params=()):
         query = query.replace("?", "%s")
     cursor.execute(query, params)
 
+def to_dict(row):
+    """Safely convert a database row (sqlite3.Row, RealDictCursor dict, or tuple) into a standard dictionary"""
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return row
+    try:
+        return dict(row)
+    except Exception:
+        if hasattr(row, "_asdict"):
+            return row._asdict()
+        return {}
+
 def init_db():
     """Initialize database tables for PostgreSQL or SQLite"""
     conn = get_db()

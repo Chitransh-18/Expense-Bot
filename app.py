@@ -12,7 +12,7 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from config import SECRET_KEY, PORT, DEBUG
-from database import init_db, get_db, execute_sql
+from database import init_db, get_db, execute_sql, to_dict
 from services.email_service import send_otp_email, is_smtp_configured, get_smtp_config
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -20,6 +20,12 @@ CORS(app)
 
 # Initialize Database on startup
 init_db()
+
+# --- Global Error Handler to return JSON instead of HTML on exceptions ---
+@app.errorhandler(Exception)
+def handle_exception(e):
+    print(f"❌ Global API Exception: {e}")
+    return jsonify({"error": f"Server Error: {str(e)}"}), 500
 
 # --- Auth Helper Decorator ---
 def token_required(f):
@@ -41,8 +47,9 @@ def token_required(f):
             conn = get_db()
             cursor = conn.cursor()
             execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE id = ?", (data["user_id"],))
-            current_user = cursor.fetchone()
+            user_row = cursor.fetchone()
             conn.close()
+            current_user = to_dict(user_row)
             if not current_user:
                 return jsonify({"error": "User not found"}), 401
         except jwt.ExpiredSignatureError:
@@ -50,7 +57,7 @@ def token_required(f):
         except jwt.InvalidTokenError:
             return jsonify({"error": "Invalid token"}), 401
 
-        return f(dict(current_user), *args, **kwargs)
+        return f(current_user, *args, **kwargs)
     return decorated
 
 # --- Static PWA Routes ---
@@ -114,15 +121,16 @@ def check_user():
     conn = get_db()
     cursor = conn.cursor()
     execute_sql(cursor, conn, "SELECT id, email, full_name, is_password_set FROM users WHERE email = ?", (email,))
-    user = cursor.fetchone()
+    user_row = cursor.fetchone()
     conn.close()
 
+    user = to_dict(user_row)
+
     if user:
-        u_dict = dict(user)
         return jsonify({
             "exists": True,
-            "has_password": bool(u_dict.get("is_password_set", 0)),
-            "full_name": u_dict.get("full_name", "")
+            "has_password": bool(user.get("is_password_set", 0)),
+            "full_name": user.get("full_name", "")
         })
     else:
         return jsonify({
@@ -143,21 +151,20 @@ def login_password():
     conn = get_db()
     cursor = conn.cursor()
     execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
-    user = cursor.fetchone()
+    user_row = cursor.fetchone()
     conn.close()
 
+    user = to_dict(user_row)
     if not user:
         return jsonify({"error": "User not found with this email"}), 400
 
-    user_dict = dict(user)
-
     # Check password match
-    if not check_password_hash(user_dict["password_hash"], password):
+    if not check_password_hash(user["password_hash"], password):
         return jsonify({"error": "Incorrect password. Try again or sign in via OTP."}), 400
 
     # Generate JWT Token
     token = jwt.encode(
-        {"user_id": user_dict["id"], "exp": datetime.utcnow() + timedelta(days=30)},
+        {"user_id": user["id"], "exp": datetime.utcnow() + timedelta(days=30)},
         SECRET_KEY,
         algorithm="HS256"
     )
@@ -166,9 +173,9 @@ def login_password():
         "message": "Signed in successfully!",
         "token": token,
         "user": {
-            "id": user_dict["id"],
-            "email": user_dict["email"],
-            "full_name": user_dict["full_name"]
+            "id": user["id"],
+            "email": user["email"],
+            "full_name": user["full_name"]
         }
     })
 
@@ -249,7 +256,7 @@ def verify_otp_set_password():
 
     # Find or Create User
     execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
-    user = cursor.fetchone()
+    user = to_dict(cursor.fetchone())
 
     if not user:
         name = full_name if full_name else email.split("@")[0].title()
@@ -258,8 +265,8 @@ def verify_otp_set_password():
             (email, pwd_hash, name)
         )
         execute_sql(cursor, conn, "SELECT id FROM users WHERE email = ?", (email,))
-        row = cursor.fetchone()
-        user_id = dict(row)["id"] if row else 1
+        row = to_dict(cursor.fetchone())
+        user_id = row["id"] if row else 1
         conn.commit()
         user_dict = {"id": user_id, "email": email, "full_name": name}
     else:
@@ -311,7 +318,7 @@ def verify_otp():
     execute_sql(cursor, conn, "DELETE FROM otp_codes WHERE email = ?", (email,))
 
     execute_sql(cursor, conn, "SELECT * FROM users WHERE email = ?", (email,))
-    user = cursor.fetchone()
+    user = to_dict(cursor.fetchone())
 
     if not user:
         name = full_name if full_name else email.split("@")[0].title()
@@ -321,8 +328,8 @@ def verify_otp():
             (email, default_pwd_hash, name)
         )
         execute_sql(cursor, conn, "SELECT id FROM users WHERE email = ?", (email,))
-        row = cursor.fetchone()
-        user_id = dict(row)["id"] if row else 1
+        row = to_dict(cursor.fetchone())
+        user_id = row["id"] if row else 1
         conn.commit()
         user_dict = {"id": user_id, "email": email, "full_name": name, "is_password_set": 0}
     else:
@@ -366,7 +373,7 @@ def get_expenses(current_user):
 
     query += " ORDER BY date DESC, id DESC"
     execute_sql(cursor, conn, query, params)
-    rows = [dict(r) for r in cursor.fetchall()]
+    rows = [to_dict(r) for r in cursor.fetchall()]
     conn.close()
 
     now = datetime.now()
@@ -426,8 +433,8 @@ def add_expense(current_user):
         ''', (current_user["id"], expense_type, category, user_amount, payment_mode, description, date_str, split_with, split_type))
 
     execute_sql(cursor, conn, "SELECT id FROM expenses WHERE user_id = ? ORDER BY id DESC LIMIT 1", (current_user["id"],))
-    row = cursor.fetchone()
-    expense_id = dict(row)["id"] if row else 1
+    row = to_dict(cursor.fetchone())
+    expense_id = row["id"] if row else 1
     conn.commit()
     conn.close()
 
@@ -468,7 +475,7 @@ def get_recurring_bills(current_user):
     conn = get_db()
     cursor = conn.cursor()
     execute_sql(cursor, conn, "SELECT * FROM recurring_bills WHERE user_id = ? ORDER BY due_day ASC", (current_user["id"],))
-    rows = [dict(r) for r in cursor.fetchall()]
+    rows = [to_dict(r) for r in cursor.fetchall()]
     conn.close()
 
     now = datetime.now()
@@ -530,8 +537,8 @@ def add_recurring_bill(current_user):
         VALUES (?, ?, ?, ?, ?, ?, ?)
     ''', (current_user["id"], title, total_amount, user_share, paid_by, due_day, category))
     execute_sql(cursor, conn, "SELECT id FROM recurring_bills WHERE user_id = ? ORDER BY id DESC LIMIT 1", (current_user["id"],))
-    row = cursor.fetchone()
-    bill_id = dict(row)["id"] if row else 1
+    row = to_dict(cursor.fetchone())
+    bill_id = row["id"] if row else 1
     conn.commit()
     conn.close()
 
@@ -543,12 +550,13 @@ def settle_recurring_bill(current_user, bill_id):
     conn = get_db()
     cursor = conn.cursor()
     execute_sql(cursor, conn, "SELECT * FROM recurring_bills WHERE id = ? AND user_id = ?", (bill_id, current_user["id"]))
-    bill = cursor.fetchone()
+    bill_row = cursor.fetchone()
 
-    if not bill:
+    if not bill_row:
         conn.close()
         return jsonify({"error": "Recurring bill not found"}), 404
 
+    bill = to_dict(bill_row)
     now = datetime.now()
     current_month_str = now.strftime("%Y-%m")
     today_str = now.strftime("%Y-%m-%d")
@@ -585,7 +593,7 @@ def get_analytics(current_user):
     conn = get_db()
     cursor = conn.cursor()
     execute_sql(cursor, conn, "SELECT * FROM expenses WHERE user_id = ?", (current_user["id"],))
-    expenses = [dict(r) for r in cursor.fetchall()]
+    expenses = [to_dict(r) for r in cursor.fetchall()]
     conn.close()
 
     total_spent = sum(e["amount"] for e in expenses)
