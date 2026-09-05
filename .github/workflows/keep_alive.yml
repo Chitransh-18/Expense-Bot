@@ -1,0 +1,30 @@
+name: Supabase & Render 24/7 Keep-Alive Bot
+
+on:
+  schedule:
+    - cron: '0 0 */3 * *'  # Runs automatically every 3 days at 00:00 UTC
+  workflow_dispatch:        # Allows manual 1-click trigger anytime from GitHub Actions UI
+
+jobs:
+  keep-alive-ping:
+    name: Ping App & Supabase Database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute Keep-Alive Heartbeat Ping
+        run: |
+          echo "🤖 Triggering ExpenseTracker Pro Keep-Alive Bot..."
+          TARGET_URL="https://expense-bot-1-jyl4.onrender.com/api/ping"
+          
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" "$TARGET_URL")
+          HTTP_BODY=$(echo "$RESPONSE" | sed -e 's/HTTP_STATUS:.*//g')
+          HTTP_STATUS=$(echo "$RESPONSE" | tr -d '\n' | sed -e 's/.*HTTP_STATUS://')
+          
+          echo "Response Body: $HTTP_BODY"
+          echo "HTTP Status Code: $HTTP_STATUS"
+          
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "✅ Keep-Alive Ping Successful! Supabase database and Render server are 100% active and awake."
+          else
+            echo "⚠️ Warning: Keep-Alive ping returned status $HTTP_STATUS"
+            exit 1
+          fi

@@ -8,6 +8,14 @@ def run_tests():
     init_db()
     client = app.test_client()
 
+    # 0. Test /api/ping keep-alive heartbeat endpoint
+    res = client.get('/api/ping')
+    assert res.status_code == 200, f"/api/ping failed: {res.data}"
+    ping_data = res.get_json()
+    assert ping_data['status'] == 'active', "ping status invalid"
+    assert 'database' in ping_data, "ping database status missing"
+    print("[PASS] /api/ping Keep-Alive Bot Heartbeat passed!")
+
     rand_id = random.randint(100, 999)
     test_user = f"user_test_{rand_id}"
     test_email = f"user_test_{rand_id}@gmail.com"

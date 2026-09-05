@@ -6,6 +6,8 @@ import random
 import re
 import sqlite3
 import smtplib
+import threading
+import time
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory, Response
@@ -21,6 +23,28 @@ CORS(app)
 
 # Initialize Database on startup
 init_db()
+
+# --- Background DB Keep-Alive Thread ---
+def db_keep_alive_worker():
+    while True:
+        time.sleep(86400) # Ping every 24 hours while server is active
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+            execute_sql(cursor, conn, "SELECT 1")
+            conn.close()
+            print("💓 24h Background Database Keep-Alive Ping Executed.")
+        except Exception as e:
+            print(f"⚠️ Background Keep-Alive Ping Warning: {e}")
+
+def start_keep_alive_thread():
+    try:
+        t = threading.Thread(target=db_keep_alive_worker, daemon=True)
+        t.start()
+    except Exception as e:
+        print(f"⚠️ Keep-alive thread start notice: {e}")
+
+start_keep_alive_thread()
 
 # --- Global Error Handler to return JSON instead of HTML on exceptions ---
 @app.errorhandler(Exception)
@@ -87,6 +111,25 @@ def static_files(path):
     if path.startswith("api/"):
         return jsonify({"error": "API route not found"}), 404
     return send_from_directory("static", path)
+
+# --- Keep-Alive Heartbeat Endpoint for Supabase & Render ---
+@app.route("/api/ping", methods=["GET"])
+def ping():
+    db_status = "connected"
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        execute_sql(cursor, conn, "SELECT 1")
+        conn.close()
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+
+    return jsonify({
+        "status": "active",
+        "message": "ExpenseTracker Pro Keep-Alive Bot Heartbeat",
+        "database": db_status,
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    })
 
 # --- Authentication API Routes ---
 
