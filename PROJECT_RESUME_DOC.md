@@ -23,7 +23,7 @@ Choose the version that best matches the role you are applying for:
 
 ### Option A: Full-Stack Software Engineer (Recommended)
 - **Architected and deployed a full-stack Progressive Web Application (PWA)** in Python/Flask and vanilla JavaScript, supporting 1-tap mobile installation and offline caching for personal finance tracking.
-- **Engineered an Indian-first NLP Entity Extraction engine** parsing English, Hindi, and Hinglish conversational inputs (e.g., *"Daksh ke saath dinner 540 aadha aadha UPI se"*) in **<10ms** with zero external API dependencies and optional Gemini LLM fallback.
+- **Engineered an Indian-first NLP Entity Extraction engine** parsing English, Hindi, and Hinglish conversational inputs (e.g., *"Daksh ke saath dinner 540 aadha aadha UPI se"*), achieving sub-millisecond execution (~0.14ms benchmarked over 5,000 runs) with zero external API dependencies and optional Gemini LLM fallback.
 - **Implemented a real-time cross-device data synchronization pipeline** with window-focus triggers and 12s polling, ensuring instant ledger updates between mobile and desktop clients.
 - **Automated recurring subscription tracking and split bill management**, computing exact 50% user liability with one-click automated WhatsApp debt-settlement reminders.
 - **Designed a resilient dual-database persistence layer** auto-migrating between SQLite and cloud Supabase PostgreSQL with transaction-safe DDL migrations and a 24/7 GitHub Actions cron keep-alive bot.
@@ -119,12 +119,19 @@ Choose the version that best matches the role you are applying for:
 
 ---
 
-## 📊 6. Key Metrics & Quantifiable Impact
+## 📊 6. Key Metrics & How to Defend Them in Interviews
+When interviewers ask *"How did you measure that?"*, here is your exact, verifiable methodology:
 
-- **⚡ Latency**: Natural language parsing executes in **<10ms** locally.
-- **💰 Cost**: **$0.00/month** total hosting cost (Flask on Render Free Tier + Supabase PostgreSQL + GitHub Actions).
-- **🧪 Test Coverage**: **100% passing automated test suite** (`test_local.py`) covering auth, unique usernames, OTP verification, split arithmetic, and multilingual parsing.
-- **📱 PWA Standards**: Meets 100% of Progressive Web App installability criteria (Service Worker cache-first architecture, web app manifest, maskable icons).
+- **⚡ Parsing Latency (~0.14 ms / query)**:
+  - *Measurement*: Benchmarked in Python using `time.perf_counter()` over 5,000 iterations across English, Hindi, and Hinglish queries.
+  - *Why it's fast*: It executes in-memory deterministic regex pattern matching and hashmap keyword lookups without network hops or GPU inference overhead.
+- **🧪 Test Suite (100% Pass Rate / 54% Codebase Statement Coverage)**:
+  - *Measurement*: 10/10 automated end-to-end integration test scenarios in `test_local.py` pass with a **100% pass rate**.
+  - *Coverage*: Measured via `coverage.py` showing 54% total codebase statement coverage (`services/nlp_parser.py` reaches 77%, `database.py` reaches 61%).
+- **📱 PWA Compliance (100% Chrome Installability Criteria Met)**:
+  - *Measurement*: Fully satisfies Chrome's PWA installability requirements (valid `manifest.json`, Service Worker with active `fetch` handler, HTTPS enforcement on Render, standalone display, and responsive viewport). Triggers the native `beforeinstallprompt` browser event.
+- **💰 Infrastructure Cost ($0.00 / month)**:
+  - *Breakdown*: Hosted on Render Web Service (Free Tier) + Supabase Managed PostgreSQL (Free Tier) + GitHub Actions runner for scheduled synthetic keep-alive pings every 3 days.
 
 ---
 
