@@ -10,41 +10,42 @@ const Recurring = {
   },
 
   renderAlertBanners(bills) {
-    // Check if any bill is due today or overdue
-    const urgentBills = bills.filter(b => (b.status === 'Due Today' || b.status === 'Overdue' || b.status === 'Upcoming') && !b.is_settled_this_month);
-    if (!urgentBills.length) return '';
+    const overdueBills = bills.filter(b => b.status === 'Overdue');
+    const dueTodayBills = bills.filter(b => b.status === 'Due Today');
 
-    return urgentBills.map(bill => {
-      const isDueToday = bill.status === 'Due Today';
-      const badgeClass = isDueToday ? 'badge-danger' : (bill.status === 'Overdue' ? 'badge-danger' : 'badge-warning');
-      const paidByText = bill.paid_by !== 'Self' ? ` (Paid by <strong>${bill.paid_by}</strong>)` : '';
-      
-      return `
-        <div class="alert-banner">
-          <div class="alert-info">
-            <div class="alert-icon">${isDueToday ? '🚨' : '📅'}</div>
+    let html = '';
+
+    if (overdueBills.length > 0) {
+      html += `
+        <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-lg); padding: 1rem 1.4rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.8rem;">
+          <div style="display: flex; align-items: center; gap: 0.8rem;">
+            <span style="font-size: 1.5rem;">🚨</span>
             <div>
-              <div style="font-weight: 700; font-size: 1.05rem;">
-                ${bill.title} - ${bill.status_text} ${paidByText}
-              </div>
-              <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem;">
-                Your Share: <strong style="color: var(--text-main);">₹${bill.user_share.toLocaleString('en-IN')}</strong> of Total ₹${bill.total_amount.toLocaleString('en-IN')}
-              </div>
+              <strong style="color: #ef4444; font-size: 0.95rem;">Overdue Recurring Bill${overdueBills.length > 1 ? 's' : ''}!</strong>
+              <div style="font-size: 0.85rem; color: var(--text-muted);">${overdueBills.map(b => `${b.title} (₹${b.user_share})`).join(', ')}</div>
             </div>
           </div>
-          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            ${bill.paid_by !== 'Self' ? `
-              <button class="btn btn-whatsapp btn-sm" onclick="Reminders.sendWhatsAppReminder('${bill.paid_by}', ${bill.user_share}, '${bill.title}')">
-                📲 Remind ${bill.paid_by}
-              </button>
-            ` : ''}
-            <button class="btn btn-primary btn-sm" onclick="Recurring.settleBill(${bill.id})">
-              ✅ Mark Paid
-            </button>
-          </div>
+          <button class="btn btn-primary btn-sm" onclick="window.location.hash='#recurring'">Review Overdue Bills</button>
         </div>
       `;
-    }).join('');
+    }
+
+    if (dueTodayBills.length > 0) {
+      html += `
+        <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-lg); padding: 1rem 1.4rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.8rem;">
+          <div style="display: flex; align-items: center; gap: 0.8rem;">
+            <span style="font-size: 1.5rem;">📅</span>
+            <div>
+              <strong style="color: #f59e0b; font-size: 0.95rem;">Due Today!</strong>
+              <div style="font-size: 0.85rem; color: var(--text-muted);">${dueTodayBills.map(b => `${b.title} (₹${b.user_share})`).join(', ')}</div>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="window.location.hash='#recurring'">Check Bills</button>
+        </div>
+      `;
+    }
+
+    return html;
   },
 
   async renderPage() {
@@ -53,10 +54,10 @@ const Recurring = {
     const alertBanners = this.renderAlertBanners(bills);
 
     let html = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
         <div>
           <h2 class="page-title">📅 Recurring Monthly Bills</h2>
-          <p style="color: var(--text-muted); font-size: 0.95rem;">Track monthly subscriptions like YouTube Family (Daksh), Wi-Fi & Rent</p>
+          <p style="color: var(--text-muted); font-size: 0.95rem; margin-top: 0.2rem;">Track monthly subscriptions like YouTube Family (Daksh), Wi-Fi & Rent</p>
         </div>
         <button class="btn btn-primary" onclick="Recurring.openAddModal()">
           ➕ Add Recurring Bill
@@ -66,61 +67,70 @@ const Recurring = {
       ${alertBanners}
 
       <div class="glass-card">
-        <h3 style="margin-bottom: 1.2rem; font-size: 1.1rem; font-weight: 600;">Your Active Monthly Bills</h3>
-        <div class="table-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Bill / Subscription</th>
-                <th>Due Day</th>
-                <th>Paid By</th>
-                <th>Total Bill</th>
-                <th>Your Share</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${bills.length ? bills.map(b => `
+        <h3 style="margin-bottom: 1.2rem; font-size: 1.15rem; font-weight: 700;">Your Active Monthly Bills</h3>
+        
+        ${bills.length ? `
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
                 <tr>
-                  <td>
-                    <strong>${b.title}</strong>
-                    <div style="font-size: 0.75rem; color: var(--text-dim);">${b.category}</div>
-                  </td>
-                  <td><span style="font-weight: 600;">${b.due_day}th</span> of month</td>
-                  <td>${b.paid_by === 'Self' ? '👤 Self' : `👥 ${b.paid_by}`}</td>
-                  <td>₹${b.total_amount.toLocaleString('en-IN')}</td>
-                  <td><strong style="color: var(--primary);">₹${b.user_share.toLocaleString('en-IN')}</strong></td>
-                  <td>
-                    <span class="badge ${b.is_settled_this_month ? 'badge-success' : (b.status === 'Due Today' || b.status === 'Overdue' ? 'badge-danger' : 'badge-warning')}">
-                      ${b.status_text}
-                    </span>
-                  </td>
-                  <td>
-                    <div style="display: flex; gap: 0.4rem;">
-                      ${!b.is_settled_this_month ? `
-                        <button class="btn btn-primary btn-sm" onclick="Recurring.settleBill(${b.id})">
-                          ✅ Settle
-                        </button>
-                      ` : '<span style="color: var(--success); font-size: 0.85rem; font-weight: 600;">Paid ✅</span>'}
-                      ${b.paid_by !== 'Self' ? `
-                        <button class="btn btn-whatsapp btn-sm" onclick="Reminders.sendWhatsAppReminder('${b.paid_by}', ${b.user_share}, '${b.title}')">
-                          📲 Remind
-                        </button>
-                      ` : ''}
-                    </div>
-                  </td>
+                  <th>Bill / Subscription</th>
+                  <th>Due Day</th>
+                  <th>Paid By</th>
+                  <th>Total Bill</th>
+                  <th>Your Share</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
-              `).join('') : `
-                <tr>
-                  <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">
-                    No recurring bills set up yet. Click "Add Recurring Bill" above to track YouTube Premium (Daksh), Wi-Fi, etc.
-                  </td>
-                </tr>
-              `}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                ${bills.map(b => `
+                  <tr>
+                    <td>
+                      <strong>${b.title}</strong>
+                      <div style="font-size: 0.75rem; color: var(--text-muted);">${b.category}</div>
+                    </td>
+                    <td><span style="font-weight: 600;">${b.due_day}th</span> of month</td>
+                    <td>${b.paid_by === 'Self' ? '👤 Self' : `👥 ${b.paid_by}`}</td>
+                    <td>₹${b.total_amount.toLocaleString('en-IN')}</td>
+                    <td><strong style="color: var(--primary);">₹${b.user_share.toLocaleString('en-IN')}</strong></td>
+                    <td>
+                      <span class="badge ${b.is_settled_this_month ? 'badge-success' : (b.status === 'Due Today' || b.status === 'Overdue' ? 'badge-danger' : 'badge-warning')}">
+                        ${b.status_text}
+                      </span>
+                    </td>
+                    <td>
+                      <div style="display: flex; gap: 0.4rem; align-items: center;">
+                        ${!b.is_settled_this_month ? `
+                          <button class="btn btn-primary btn-sm" onclick="Recurring.settleBill(${b.id})">
+                            ✅ Settle
+                          </button>
+                        ` : '<span style="color: var(--success); font-size: 0.85rem; font-weight: 700;">Paid ✅</span>'}
+                        ${b.paid_by !== 'Self' ? `
+                          <button class="btn btn-whatsapp btn-sm" onclick="Reminders.sendWhatsAppReminder('${b.paid_by}', ${b.user_share}, '${b.title}')">
+                            📲 Remind
+                          </button>
+                        ` : ''}
+                      </div>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : `
+          <!-- Checklist Item 11: Illustrated Empty State -->
+          <div class="empty-state-card">
+            <div class="empty-state-icon">📅</div>
+            <h3 class="empty-state-title">No Recurring Bills Set Up</h3>
+            <p class="empty-state-desc">
+              Never miss a monthly subscription again! Add your YouTube Family plan, Wi-Fi bill, or Rent to get automated payment alerts and split reminders.
+            </p>
+            <button class="btn btn-primary" onclick="Recurring.openAddModal()">
+              ➕ Add Your First Bill
+            </button>
+          </div>
+        `}
       </div>
     `;
 
@@ -158,13 +168,13 @@ const Recurring = {
         <div class="form-group">
           <label class="form-label">Category</label>
           <select class="form-select" id="rec-category">
-            <option value="Subscriptions">Subscriptions (YouTube, Netflix, etc.)</option>
-            <option value="Bills">Bills (Wi-Fi, Electricity)</option>
-            <option value="Housing">Housing (Rent, Maintenance)</option>
-            <option value="Other">Other</option>
+            <option value="Subscriptions">Subscriptions (YouTube, Netflix, Spotify)</option>
+            <option value="Bills">Utilities (Wi-Fi, Electricity, Gas)</option>
+            <option value="Housing">Housing (Rent, Maintenance, Maid)</option>
+            <option value="Other">Other Recurring Expense</option>
           </select>
         </div>
-        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem; padding: 0.95rem;">
           Save Recurring Bill
         </button>
       </form>
@@ -187,9 +197,10 @@ const Recurring = {
         body: JSON.stringify({ title, total_amount, user_share, paid_by, due_day, category })
       });
       App.closeModal();
+      Toast.show('✅ Recurring bill added successfully!', 'success');
       this.renderPage();
     } catch (err) {
-      alert(err.message || 'Failed to add recurring bill');
+      Toast.show(err.message || 'Failed to add recurring bill', 'error');
     }
   },
 
@@ -197,9 +208,10 @@ const Recurring = {
     if (!confirm('Mark this bill as settled for the current month? This will also log it as an expense.')) return;
     try {
       await API.request(`/api/recurring/${billId}/settle`, { method: 'POST' });
+      Toast.show('🎉 Bill marked as settled and logged!', 'success');
       this.renderPage();
     } catch (err) {
-      alert(err.message || 'Failed to settle bill');
+      Toast.show(err.message || 'Failed to settle bill', 'error');
     }
   }
 };

@@ -29,22 +29,23 @@
   --radius-sm: 8px;
 }
 
-* {
+/* Checklist Item 1: Remove horizontal scroll across entire document */
+html, body {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-tap-highlight-color: transparent;
-}
-
-body {
   background-color: var(--bg-dark);
   color: var(--text-main);
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow-x: hidden;
-  position: relative;
+}
+
+*, *::before, *::after {
+  box-sizing: inherit;
 }
 
 /* Ambient Warm Glowing Background Mesh */
@@ -55,10 +56,11 @@ body::before {
   left: -10%;
   width: 55vw;
   height: 55vw;
-  background: radial-gradient(circle, rgba(255, 126, 95, 0.12) 0%, rgba(254, 180, 123, 0.05) 50%, transparent 70%);
+  background: radial-gradient(circle, rgba(255, 126, 95, 0.1) 0%, rgba(254, 180, 123, 0.04) 50%, transparent 70%);
   filter: blur(80px);
   z-index: -2;
   animation: meshGlow 14s infinite alternate ease-in-out;
+  pointer-events: none;
 }
 
 body::after {
@@ -68,16 +70,192 @@ body::after {
   right: -10%;
   width: 55vw;
   height: 55vw;
-  background: radial-gradient(circle, rgba(79, 70, 229, 0.08) 0%, rgba(16, 185, 129, 0.05) 50%, transparent 70%);
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.07) 0%, rgba(16, 185, 129, 0.04) 50%, transparent 70%);
   filter: blur(90px);
   z-index: -2;
   animation: meshGlow 18s infinite alternate-reverse ease-in-out;
+  pointer-events: none;
 }
 
 @keyframes meshGlow {
   0% { transform: translate(0, 0) scale(1); }
   50% { transform: translate(30px, 20px) scale(1.08); }
   100% { transform: translate(-20px, 40px) scale(0.96); }
+}
+
+/* Checklist Items 13 & 14: Elegant Toast Notification System */
+.toast-container {
+  position: fixed;
+  top: 1.2rem;
+  right: 1.2rem;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 380px;
+  width: calc(100% - 2.4rem);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1.2rem;
+  background: #ffffff;
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15), 0 2px 8px rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--border-glass-highlight);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+  pointer-events: auto;
+  transform: translateX(120%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+  opacity: 0;
+}
+
+.toast.toast-show {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.toast-success {
+  border-left: 4px solid var(--success);
+}
+
+.toast-error {
+  border-left: 4px solid var(--danger);
+  color: #991b1b;
+}
+
+.toast-info {
+  border-left: 4px solid var(--cyan);
+}
+
+/* Mobile Top Header (Checklist Item 8) */
+.mobile-top-bar {
+  display: none;
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-glass);
+  padding: 0 1.2rem;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 500;
+}
+
+.mobile-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.brand-icon-sm {
+  width: 34px;
+  height: 34px;
+  background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+}
+
+.mobile-brand-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.mobile-header-btn {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.4rem 0.65rem;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Mobile Bottom Navigation Bar (Checklist Items 8 & 10) */
+.mobile-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(64px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border-glass);
+  z-index: 500;
+  justify-content: space-around;
+  align-items: center;
+  box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.05);
+}
+
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  background: none;
+  border: none;
+  padding: 0.5rem 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 48px;
+}
+
+.bottom-nav-item.active {
+  color: #ff6b6b;
+  font-weight: 700;
+}
+
+.bottom-nav-item .nav-icon {
+  font-size: 1.25rem;
+}
+
+.bottom-nav-item .nav-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+}
+
+.bottom-nav-action-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+  color: #fff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(255, 107, 107, 0.45);
+  cursor: pointer;
+  transform: translateY(-8px);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bottom-nav-action-btn:active {
+  transform: translateY(-5px) scale(0.95);
 }
 
 /* Fullscreen Auth Overlay */
@@ -126,7 +304,6 @@ body::after {
   background: #ffffff;
 }
 
-/* Auth Tab Toggle Header */
 .auth-tabs-header {
   display: flex;
   background: #f1f5f9;
@@ -168,7 +345,7 @@ body::after {
     display: none;
   }
   .auth-form-panel {
-    padding: 2.5rem 1.8rem;
+    padding: 2rem 1.5rem;
   }
 }
 
@@ -179,6 +356,7 @@ body::after {
   max-width: 1440px;
   margin: 0 auto;
   width: 100%;
+  overflow-x: hidden;
 }
 
 /* Sidebar Navigation */
@@ -253,12 +431,167 @@ body::after {
   box-shadow: 0 4px 12px rgba(255, 107, 107, 0.08);
 }
 
+/* Clickable Email Support (Checklist Item 6) */
+.support-email-link {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--cyan);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0.4rem 0.6rem;
+  background: rgba(79, 70, 229, 0.06);
+  border-radius: var(--radius-sm);
+  transition: background 0.2s ease;
+}
+
+.support-email-link:hover {
+  background: rgba(79, 70, 229, 0.12);
+  text-decoration: underline;
+}
+
 /* Main Content Area */
 .main-content {
   flex: 1;
   padding: 2.5rem 3rem;
   overflow-y: auto;
   max-width: 1170px;
+  min-width: 0;
+}
+
+/* Top Bar Layout */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 2.5rem;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.page-title {
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.3rem;
+  color: #0f172a;
+}
+
+/* ⚡ The Core USP: AI Magic Natural Language Prompt Card */
+.ai-magic-card {
+  background: linear-gradient(135deg, #ffffff, #fff9f6);
+  border: 2px solid rgba(255, 107, 107, 0.25);
+  border-radius: var(--radius-xl);
+  padding: 1.6rem 1.8rem;
+  margin-bottom: 2.2rem;
+  box-shadow: 0 12px 35px rgba(255, 107, 107, 0.09), 0 2px 8px rgba(15, 23, 42, 0.04);
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-magic-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.9rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #ea580c;
+  background: rgba(234, 88, 12, 0.1);
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+}
+
+.ai-input-group {
+  display: flex;
+  gap: 0.8rem;
+  position: relative;
+  align-items: center;
+}
+
+.ai-magic-input {
+  flex: 1;
+  padding: 1rem 1.3rem;
+  font-size: 1rem;
+  font-weight: 500;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  outline: none;
+  transition: all 0.25s ease;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.ai-magic-input:focus {
+  border-color: #ff6b6b;
+  box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.15);
+}
+
+.ai-mic-btn {
+  background: #f1f5f9;
+  border: 1.5px solid #cbd5e1;
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1.1rem;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-mic-btn:hover {
+  background: #e2e8f0;
+}
+
+.ai-mic-btn.listening {
+  background: #fee2e2;
+  border-color: #ef4444;
+  animation: pulseMic 1.2s infinite;
+}
+
+@keyframes pulseMic {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.ai-suggestions-row {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ai-pill {
+  font-size: 0.76rem;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--text-muted);
+  border: 1px solid var(--border-glass);
+  padding: 0.25rem 0.65rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ai-pill:hover {
+  background: #f1f5f9;
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.3);
 }
 
 /* Spacious Floating Light Cards */
@@ -276,22 +609,36 @@ body::after {
   border-color: var(--border-glass-highlight);
 }
 
-.page-title {
-  font-size: 2.2rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  margin-bottom: 0.3rem;
-  color: #0f172a;
+/* Checklist Item 11: Illustrated Empty State Component */
+.empty-state-card {
+  text-align: center;
+  padding: 3.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
 }
 
-/* Top Bar Layout */
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 2.5rem;
-  gap: 1.5rem;
-  flex-wrap: wrap;
+.empty-state-icon {
+  font-size: 3.2rem;
+  margin-bottom: 0.2rem;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.08));
+}
+
+.empty-state-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.empty-state-desc {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  max-width: 440px;
+  line-height: 1.5;
+  margin-bottom: 0.8rem;
 }
 
 /* Form Controls */
@@ -338,6 +685,7 @@ body::after {
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   text-decoration: none;
+  min-height: 44px; /* Checklist Item 10: 44px touch target */
 }
 
 .btn-primary {
@@ -376,6 +724,7 @@ body::after {
   padding: 0.55rem 1.1rem;
   font-size: 0.85rem;
   border-radius: var(--radius-sm);
+  min-height: 38px;
 }
 
 /* OTP Digits Container */
@@ -438,15 +787,18 @@ body::after {
   color: #0f172a;
 }
 
-/* Data Table */
+/* Data Table with Smooth Mobile Scroll (Checklist Item 1 & 12) */
 .table-container {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
 }
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  min-width: 600px;
 }
 
 .data-table th, .data-table td {
@@ -502,6 +854,7 @@ body::after {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
+  padding: 1rem;
 }
 
 .modal-overlay.active {
@@ -515,7 +868,9 @@ body::after {
   border-radius: var(--radius-xl);
   padding: 2.2rem;
   max-width: 520px;
-  width: 90%;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 25px 60px rgba(15, 23, 42, 0.18);
 }
 
@@ -526,4 +881,105 @@ body::after {
   margin-bottom: 1.5rem;
   border-bottom: 1px solid var(--border-glass);
   padding-bottom: 1rem;
+}
+
+/* Support Modal Cards (Checklist Items 6 & 16) */
+.support-contact-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.support-contact-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1.2rem;
+  background: #f8fafc;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: var(--text-main);
+  transition: all 0.2s ease;
+}
+
+.support-contact-card:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  transform: translateY(-2px);
+}
+
+/* Checklist Items 1, 8, 10, 12: Mobile Viewport Optimization */
+@media (max-width: 768px) {
+  .sidebar {
+    display: none !important;
+  }
+
+  .mobile-top-bar {
+    display: flex;
+  }
+
+  .mobile-bottom-nav {
+    display: flex;
+  }
+
+  .main-content {
+    padding: 1.2rem 1.2rem calc(80px + env(safe-area-inset-bottom, 0px)) 1.2rem;
+  }
+
+  .page-title {
+    font-size: 1.8rem;
+  }
+
+  .top-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.8rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .stat-card {
+    padding: 1.2rem;
+  }
+
+  .stat-value {
+    font-size: 1.7rem;
+  }
+
+  .glass-card {
+    padding: 1.4rem;
+  }
+
+  .ai-magic-card {
+    padding: 1.2rem;
+  }
+
+  .ai-input-group {
+    flex-direction: column;
+  }
+
+  .ai-magic-input {
+    width: 100%;
+  }
+
+  .ai-input-group .btn {
+    width: 100%;
+  }
+
+  .support-contact-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
 }

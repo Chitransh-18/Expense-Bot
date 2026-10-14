@@ -2,38 +2,81 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>ExpenseTracker Pro - Installable Web App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  
+  <!-- SEO & Social Meta Tags (Checklist Items 2 & 4) -->
+  <title>ExpenseTracker Pro - Smart AI Expense Tracker & Split Manager</title>
+  <meta name="description" content="ExpenseTracker Pro - Track personal spending, split expenses in 50% shares with friends, manage recurring bills, and log expenses with AI natural language in English, Hindi, and Hinglish." />
+  <meta name="keywords" content="expense tracker, ai expense tracker, splitwise alternative, bill manager, pwa, budget tracker, hinglish expense logger, personal finance" />
+  <meta name="author" content="Chitransh Saxena" />
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://expense-bot-1-jyl4.onrender.com/" />
+  <meta property="og:title" content="ExpenseTracker Pro - Smart AI Expense Tracker & Split Manager" />
+  <meta property="og:description" content="Track expenses, split group bills with friends, manage subscriptions, and log expenses using Natural Language in English, Hindi & Hinglish." />
+  <meta property="og:image" content="https://img.icons8.com/color/512/wallet--v1.png" />
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:title" content="ExpenseTracker Pro - Smart AI Expense Tracker" />
+  <meta property="twitter:description" content="Track expenses, split group bills with friends, and manage monthly recurring bills." />
   
   <!-- Google Fonts: Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
 
-  <!-- PWA Manifest & Icons -->
+  <!-- PWA Manifest & Icons (Checklist Item 3) -->
   <link rel="manifest" href="/manifest.json" />
-  <meta name="theme-color" content="#6366f1" />
+  <meta name="theme-color" content="#ffffff" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <link rel="icon" type="image/png" href="https://img.icons8.com/color/192/wallet--v1.png" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  
+  <!-- Favicon (SVG + PNG Fallback) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>" />
+  <link rel="alternate icon" type="image/png" href="https://img.icons8.com/color/192/wallet--v1.png" />
+  <link rel="apple-touch-icon" href="https://img.icons8.com/color/192/wallet--v1.png" />
   
   <!-- CSS Design System -->
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
 
+  <!-- Floating Toast Notifications Container (Checklist Items 13 & 14) -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Mobile Top Header Bar (Checklist Items 8 & 10) -->
+  <header class="mobile-top-bar" id="mobile-top-bar" style="display: none;">
+    <div class="mobile-brand" onclick="window.location.hash='#dashboard'">
+      <div class="brand-icon-sm">💰</div>
+      <span class="mobile-brand-title">ExpenseTracker</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <div id="mobile-cloud-sync" style="font-size: 0.72rem; padding: 0.25rem 0.55rem; background: #f1f5f9; border-radius: 12px; color: #4f46e5; font-weight: 700;">
+        🟢 Live
+      </div>
+      <button class="mobile-header-btn" onclick="App.openSupportModal()" title="Support & Info">
+        ℹ️
+      </button>
+      <button class="mobile-header-btn" onclick="App.logout()" title="Sign Out">
+        🚪
+      </button>
+    </div>
+  </header>
+
   <div class="app-container">
     
-    <!-- Sidebar Navigation -->
+    <!-- Desktop Sidebar Navigation -->
     <aside class="sidebar">
       <div>
-        <div class="brand">
+        <div class="brand" onclick="window.location.hash='#dashboard'" style="cursor: pointer;">
           <div class="brand-icon">💰</div>
           <span>ExpenseTracker</span>
         </div>
 
-        <div id="cloud-sync-badge" style="display: none; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--cyan); background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.25); border-radius: 20px; padding: 0.3rem 0.75rem; margin: 0.8rem 0 1.2rem 0; width: fit-content;">
-          🟢 <span style="font-size: 0.78rem; opacity: 0.95;">Cloud Synced</span>
+        <div id="cloud-sync-badge" style="display: none; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: #4f46e5; background: rgba(79, 70, 229, 0.08); border: 1px solid rgba(79, 70, 229, 0.2); border-radius: 20px; padding: 0.3rem 0.75rem; margin: 0.5rem 0 1.2rem 0; width: fit-content;">
+          🟢 <span style="font-size: 0.78rem; opacity: 0.95; font-weight: 600;">Cloud Synced</span>
         </div>
 
         <ul class="nav-menu">
@@ -49,16 +92,26 @@
             <span style="font-size: 1.2rem;">📅</span>
             <span>Recurring Bills</span>
           </li>
+          <li class="nav-item" onclick="App.openSupportModal()">
+            <span style="font-size: 1.2rem;">💬</span>
+            <span>Help & Support</span>
+          </li>
         </ul>
       </div>
 
-      <div class="user-profile-sidebar" style="display: flex; flex-direction: column; gap: 0.8rem;">
+      <div class="user-profile-sidebar" style="display: flex; flex-direction: column; gap: 0.7rem;">
         <button class="btn btn-secondary btn-sm" id="btn-install-app" style="display: none;" onclick="triggerInstallApp()">
           📱 Install App
         </button>
         <button class="btn btn-secondary btn-sm" onclick="App.openInstallHelpModal()">
           📲 Mobile Install Guide
         </button>
+        
+        <!-- Clickable Email Support (Checklist Item 6) -->
+        <a href="mailto:chitranshsaxena85@gmail.com" class="support-email-link" title="Click to email support">
+          📧 <span>chitranshsaxena85@gmail.com</span>
+        </a>
+
         <button class="btn btn-secondary btn-sm" onclick="App.logout()">
           🚪 Sign Out
         </button>
@@ -74,12 +127,38 @@
 
   </div>
 
+  <!-- Mobile Bottom Navigation Bar (Checklist Items 8 & 10) -->
+  <nav class="mobile-bottom-nav" id="mobile-bottom-nav" style="display: none;">
+    <button class="bottom-nav-item active" id="mob-nav-dashboard" onclick="window.location.hash='#dashboard'">
+      <span class="nav-icon">📊</span>
+      <span class="nav-label">Dashboard</span>
+    </button>
+    <button class="bottom-nav-item" id="mob-nav-expenses" onclick="window.location.hash='#expenses'">
+      <span class="nav-icon">💰</span>
+      <span class="nav-label">Expenses</span>
+    </button>
+    
+    <!-- Prominent Quick Add Center Action Button -->
+    <button class="bottom-nav-action-btn" onclick="Expenses.openAddModal()" title="Quick Log Expense">
+      <span style="font-size: 1.4rem;">➕</span>
+    </button>
+
+    <button class="bottom-nav-item" id="mob-nav-recurring" onclick="window.location.hash='#recurring'">
+      <span class="nav-icon">📅</span>
+      <span class="nav-label">Bills</span>
+    </button>
+    <button class="bottom-nav-item" id="mob-nav-support" onclick="App.openSupportModal()">
+      <span class="nav-icon">💬</span>
+      <span class="nav-label">Support</span>
+    </button>
+  </nav>
+
   <!-- Universal Reusable Modal -->
   <div class="modal-overlay" id="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
         <h3 id="modal-title" style="font-size: 1.2rem; font-weight: 700;">Modal Title</h3>
-        <button onclick="App.closeModal()" style="background: none; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer;">&times;</button>
+        <button onclick="App.closeModal()" style="background: none; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer; padding: 0.2rem 0.5rem;" aria-label="Close modal">&times;</button>
       </div>
       <div id="modal-body">
         <!-- Modal Form Content -->

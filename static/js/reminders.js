@@ -29,10 +29,10 @@ const Reminders = {
 
   copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
-      alert('Reminder message copied to clipboard! You can paste it into WhatsApp, SMS, or Telegram.');
+      Toast.show('📋 Reminder message copied to clipboard!', 'success');
     }).catch(err => {
       console.error('Clipboard copy failed:', err);
-      alert(text);
+      Toast.show('Could not copy to clipboard automatically.', 'error');
     });
   },
 

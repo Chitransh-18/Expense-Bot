@@ -16,6 +16,19 @@
 
 ## ✨ Features & Architecture Highlights
 
+- ⚡ **Natural Language AI Expense Logger (USP)**:
+  - Log expenses in plain conversational text in **English, Hindi, and Hinglish** (e.g. *"Dinner 540 with Daksh split via UPI"*, *"Daksh ke saath khana khaya 600 aadha aadha UPI se"*, *"Uber cab 250 cash kal"*, *"Bijli ka bill 1500 online bhara"*).
+  - Automatically calculates net user share (50% = ₹270 for ₹540 total bill split with 1 friend).
+  - Features speech-to-text voice input 🎙️ using the Web Speech API!
+  - Hybrid architecture: zero-latency instant offline NLP engine + optional Gemini LLM adapter (`GEMINI_API_KEY`).
+- 📱 **Mobile-First UX & 17-Point Production Polish**:
+  - **Zero Horizontal Scroll**: Strictly contained responsive layouts.
+  - **Mobile Bottom Navigation Bar**: Floating thumb-friendly bottom app bar on screens $\le 768\text{px}$.
+  - **Toast Notification System**: Modern, floating toast alerts for errors and successes replacing browser `alert()`.
+  - **Illustrated Empty States**: Friendly emoji artwork and CTA buttons when 0 expenses or 0 bills exist.
+  - **Clickable Email & Phone Support**: Real `mailto:` and `tel:` / `wa.me/` links for direct contact.
+  - **404 Fallback Page**: Custom 404 handler with "Return to Dashboard" action.
+  - **SEO & Social Metadata**: Meta descriptions, OpenGraph tags, SVG/PNG favicons, and dynamic titles.
 - ☀️ **Vibrant & Warm Light UI**:
   - High-contrast, clean light design system built with **Plus Jakarta Sans** typography, crisp white floating cards, sunset coral accents (`#ff6b6b`, `#ff8e53`), and de-clustered spacing.
 - 🔑 **Tabbed Auth & Unique Usernames**:

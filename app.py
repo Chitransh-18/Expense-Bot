@@ -17,6 +17,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from config import SECRET_KEY, PORT, DEBUG
 from database import init_db, get_db, execute_sql, to_dict
 from services.email_service import send_otp_email, is_smtp_configured, get_smtp_config
+from services.nlp_parser import parse_natural_language_expense
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 CORS(app)
@@ -111,6 +112,13 @@ def static_files(path):
     if path.startswith("api/"):
         return jsonify({"error": "API route not found"}), 404
     return send_from_directory("static", path)
+
+# --- Custom 404 Error Handler ---
+@app.errorhandler(404)
+def page_not_found(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "API endpoint not found", "status": 404}), 404
+    return send_from_directory("static", "index.html")
 
 # --- Keep-Alive Heartbeat Endpoint for Supabase & Render ---
 @app.route("/api/ping", methods=["GET"])
@@ -505,6 +513,100 @@ def delete_expense(current_user, expense_id):
     if affected == 0:
         return jsonify({"error": "Expense not found"}), 404
     return jsonify({"message": "Expense deleted successfully"})
+
+# --- Natural Language Text Message Parsing & Quick-Add Endpoints (USP) ---
+@app.route("/api/expenses/parse-natural-language", methods=["POST"])
+@token_required
+def parse_natural_language(current_user):
+    data = request.get_json() or {}
+    text = data.get("text", "").strip()
+
+    if not text:
+        return jsonify({"error": "Please provide an expense message to parse"}), 400
+
+    parsed = parse_natural_language_expense(text)
+    return jsonify({
+        "success": True,
+        "parsed": parsed
+    })
+
+@app.route("/api/expenses/quick-add", methods=["POST"])
+@token_required
+def quick_add_expense(current_user):
+    data = request.get_json() or {}
+    text = data.get("text", "").strip()
+
+    if not text:
+        return jsonify({"error": "Please enter an expense description"}), 400
+
+    parsed = parse_natural_language_expense(text)
+    total_bill_amount = parsed.get("total_bill_amount", 0.0)
+
+    if total_bill_amount <= 0:
+        return jsonify({
+            "error": "Could not detect amount in your message. Please mention an amount (e.g. 'Dinner 450 with Daksh' or '₹200 cab').",
+            "parsed": parsed
+        }), 400
+
+    expense_type = parsed["expense_type"]
+    category = parsed["category"]
+    user_amount = parsed["amount"]
+    payment_mode = parsed["payment_mode"]
+    description = parsed["description"]
+    date_str = parsed["date"]
+    split_with = parsed["split_with"]
+    split_type = parsed["split_type"]
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        try:
+            execute_sql(cursor, conn, '''
+                INSERT INTO expenses (user_id, expense_type, category, amount, total_bill_amount, payment_mode, description, date, split_with, split_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (current_user["id"], expense_type, category, user_amount, total_bill_amount, payment_mode, description, date_str, split_with, split_type))
+        except Exception:
+            execute_sql(cursor, conn, '''
+                INSERT INTO expenses (user_id, expense_type, category, amount, payment_mode, description, date, split_with, split_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (current_user["id"], expense_type, category, user_amount, payment_mode, description, date_str, split_with, split_type))
+        conn.commit()
+    except Exception as e:
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            conn.close()
+            init_db()
+            conn = get_db()
+            cursor = conn.cursor()
+            execute_sql(cursor, conn, '''
+                INSERT INTO expenses (user_id, expense_type, category, amount, total_bill_amount, payment_mode, description, date, split_with, split_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (current_user["id"], expense_type, category, user_amount, total_bill_amount, payment_mode, description, date_str, split_with, split_type))
+            conn.commit()
+        else:
+            raise e
+
+    execute_sql(cursor, conn, "SELECT id FROM expenses WHERE user_id = ? ORDER BY id DESC LIMIT 1", (current_user["id"],))
+    row = to_dict(cursor.fetchone())
+    expense_id = row["id"] if row else 1
+    conn.close()
+
+    return jsonify({
+        "message": f"Successfully logged {category} expense of ₹{user_amount:g}!",
+        "expense": {
+            "id": expense_id,
+            "expense_type": expense_type,
+            "category": category,
+            "amount": user_amount,
+            "total_bill_amount": total_bill_amount,
+            "payment_mode": payment_mode,
+            "description": description,
+            "date": date_str,
+            "split_with": split_with,
+            "split_type": split_type
+        },
+        "parsed": parsed
+    }), 201
 
 # --- Recurring Monthly Bills API Routes ---
 @app.route("/api/recurring", methods=["GET"])
